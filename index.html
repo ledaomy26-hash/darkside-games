@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dark Side — настольные игры</title>
+<meta name="description" content="Шахматы и шашки против компьютера и живого соперника. Играют в браузере, работают без интернета, ставятся на телефон.">
+<meta name="theme-color" content="#06070b">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: clamp(28px, 7vw, 72px) 20px 64px;
+    background: radial-gradient(circle at 20% 0%, #141830 0%, #06070b 55%);
+    color: #e6e9f5;
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+  }
+  main { max-width: 860px; margin: 0 auto; }
+  header { margin-bottom: clamp(28px, 6vw, 52px); }
+  h1 {
+    font-size: clamp(28px, 6vw, 42px); line-height: 1.15; margin: 0 0 12px;
+    letter-spacing: .5px;
+  }
+  h1 span { color: #8b5cf6; }
+  .lead { color: #9aa2bd; margin: 0; max-width: 52ch; }
+
+  .games { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .game {
+    display: block; padding: 26px 24px 24px;
+    border: 1px solid rgba(255,255,255,.08); border-radius: 18px;
+    background: rgba(20, 23, 34, .72);
+    text-decoration: none; color: inherit;
+    transition: border-color .15s, transform .15s;
+  }
+  .game:hover { border-color: rgba(139, 92, 246, .55); transform: translateY(-2px); }
+  .game .glyph { font-size: 40px; line-height: 1; display: block; margin-bottom: 14px; }
+  .game h2 { font-size: 20px; margin: 0 0 8px; }
+  .game p { margin: 0; color: #9aa2bd; font-size: 15px; }
+  .game .play { display: inline-block; margin-top: 16px; color: #22d3ee; font-size: 15px; }
+
+  .note {
+    margin-top: clamp(32px, 7vw, 56px); padding: 22px 24px;
+    border: 1px solid rgba(255,255,255,.07); border-radius: 16px;
+    background: rgba(139, 92, 246, .06);
+  }
+  .note h3 { margin: 0 0 10px; font-size: 17px; }
+  .note p { margin: 0 0 10px; color: #b7bdd2; font-size: 15px; }
+  .note p:last-child { margin-bottom: 0; }
+
+  footer { margin-top: 48px; color: #6b7391; font-size: 14px; }
+  footer a { color: #8b5cf6; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Настольные игры <span>Dark Side</span></h1>
+    <p class="lead">
+      Шахматы и шашки против компьютера или живого соперника. Открываются прямо
+      в браузере, работают без интернета и ставятся на телефон как обычное
+      приложение.
+    </p>
+  </header>
+
+  <div class="games">
+    <a class="game" href="chess/">
+      <span class="glyph">♞</span>
+      <h2>Шахматы Dark Side</h2>
+      <p>Четыре уровня компьютера, игра вдвоём за одним устройством и партия с соперником на расстоянии.</p>
+      <span class="play">Играть →</span>
+    </a>
+
+    <a class="game" href="checkers/">
+      <span class="glyph">⛀</span>
+      <h2>Шашки Dark Side</h2>
+      <p>Русские шашки: обязательный бой, дамка, многошаговое взятие. Соперник считает на несколько ходов вперёд.</p>
+      <span class="play">Играть →</span>
+    </a>
+  </div>
+
+  <div class="note">
+    <h3>Как установить на телефон</h3>
+    <p><strong>Android:</strong> откройте игру и согласитесь на предложение установить приложение. Если предложения нет — меню браузера → «Установить приложение».</p>
+    <p><strong>iPhone:</strong> откройте игру в Safari → кнопка «Поделиться» → «На экран «Домой»».</p>
+    <p>После установки игра запускается с рабочего стола и работает без интернета.</p>
+  </div>
+
+  <footer>
+    Политика конфиденциальности:
+    <a href="privacy/chess.html">шахматы</a> ·
+    <a href="privacy/checkers.html">шашки</a>
+  </footer>
+</main>
+</body>
+</html>
