@@ -308,6 +308,42 @@
     return status;
   }
 
+  /* Опознаёт знаменитые короткие маты — чтобы подписать партию по-человечески.
+     Возвращает null, если ничего примечательного не случилось. */
+  function mateNickname(status) {
+    const plies = state.moveList.length;
+    const last = state.moveList[plies - 1];
+    const san = last ? last.san : '';
+    const moves = Math.ceil(plies / 2);
+
+    // Дурацкий мат: чёрные матуют ферзём на втором ходу — быстрее не бывает
+    if (plies <= 4 && status.result === 'b' && /^Q/.test(san)) {
+      return { name: 'Дурацкий мат', icon: '🤦', moves: moves };
+    }
+
+    // Детский мат: ферзь забирает пешку f7 (или f2) на третьем-четвёртом ходу
+    if (moves <= 4 && /^Qx?f[72]/.test(san)) {
+      return { name: 'Детский мат', icon: '🙈', moves: moves };
+    }
+
+    // Просто очень быстрый мат
+    if (moves <= 10) {
+      return { name: 'Быстрый мат', icon: '😅', moves: moves };
+    }
+
+    return null;
+  }
+
+  /* Правильное окончание: 1 ход, 2 хода, 5 ходов */
+  function movesWord(n) {
+    const two = n % 100;
+    if (two >= 11 && two <= 14) return 'ходов';
+    const one = n % 10;
+    if (one === 1) return 'ход';
+    if (one >= 2 && one <= 4) return 'хода';
+    return 'ходов';
+  }
+
   function showEnd(status) {
     let title, text, icon;
 
@@ -326,14 +362,24 @@
     } else if (status.reason === 'checkmate') {
       const winnerName = status.result === 'w' ? 'Белые' : 'Чёрные';
       if (state.mode === 'local') {
+        const moves = Math.ceil(state.moveList.length / 2);
         title = winnerName + ' победили';
-        text = 'Мат. Партия завершена.';
+        text = 'Мат на ' + moves + '-м ходу.';
         icon = '👑';
       } else {
         const iWon = controls(status.result);
+        const famous = mateNickname(status);
         title = iWon ? 'Победа!' : 'Поражение';
-        text = 'Мат. ' + winnerName + ' выиграли партию.';
-        icon = iWon ? '👑' : '💀';
+        if (famous && !iWon) {
+          text = 'Вам поставили ' + famous.name.toLowerCase() + ' — за ' + famous.moves + ' ' + movesWord(famous.moves) + '.';
+          icon = famous.icon;
+        } else if (famous && iWon) {
+          text = famous.name + '! Вы выиграли за ' + famous.moves + ' ' + movesWord(famous.moves) + '.';
+          icon = '👑';
+        } else {
+          text = 'Мат на ' + Math.ceil(state.moveList.length / 2) + '-м ходу. ' + winnerName + ' выиграли партию.';
+          icon = iWon ? '👑' : '💀';
+        }
       }
     } else {
       title = 'Ничья';
@@ -435,7 +481,13 @@
     if (!sound) return;
 
     if (status.over) {
-      if (status.reason === 'checkmate') sound.checkmate();
+      if (status.reason === 'checkmate') {
+        // Вдвоём за одним устройством победитель и проигравший сидят рядом —
+        // подтрунивать не над кем, играем нейтральный сигнал мата
+        if (state.mode === 'local') sound.checkmate();
+        else if (controls(status.result)) sound.victory();
+        else sound.defeat();
+      }
       state.guardeAt = -1;
       return;
     }
@@ -1140,6 +1192,7 @@
   el.adWatch.addEventListener('click', watchAd);
   el.adClose.addEventListener('click', () => el.adOverlay.classList.remove('open'));
   Credits.onChange(refreshCredits);
+  window.addEventListener('darkside-ads-ready', refreshCredits);
   el.resign.addEventListener('click', () => {
     if (state.finished) return;
     if (confirm('Сдаться и завершить партию?')) resign();

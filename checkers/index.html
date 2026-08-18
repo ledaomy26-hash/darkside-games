@@ -145,6 +145,13 @@
           <span class="credits-count">Отмены: <b id="creditsAmount">0</b></span>
           <button class="credits-get" id="creditsGet" type="button">Получить ещё</button>
         </div>
+        <div class="field" style="margin-top:14px">
+          <label>Звук: стук шашки, бой, конец партии</label>
+          <div class="segmented" id="soundSelect">
+            <button data-sound="on" class="active">Включён</button>
+            <button data-sound="off">Выключен</button>
+          </div>
+        </div>
         <div class="field" style="margin-top:8px">
           <button class="btn danger" id="resign" hidden>Сдаться</button>
         </div>
@@ -300,6 +307,7 @@
     </div>
   </div>
 
+  <script src="sound.js"></script>
   <script src="credits.js"></script>
   <script src="engine.js"></script>
   <script src="ai.js"></script>

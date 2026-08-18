@@ -1,4 +1,4 @@
-/* Звуковые сигналы: шах, гарде (нападение на ферзя), мат.
+/* Звуковые сигналы: стук шашки, бой, исход партии.
 
    Звук синтезируется на месте через Web Audio — файлов нет вовсе. Это держит
    игру офлайновой, не добавляет веса приложению и снимает вопрос лицензий на
@@ -9,11 +9,11 @@
 (function (root, factory) {
   const api = factory();
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  else root.ChessSound = api;
+  else root.CheckersSound = api;
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const STORAGE_KEY = 'darkside-chess-sound';
+  const STORAGE_KEY = 'darkside-checkers-sound';
 
   let ctx = null;
   let enabled = loadEnabled();
@@ -153,7 +153,7 @@
   const AFTER_KNOCK = 0.13;
 
   return {
-    /* Стук фигуры о доску. Взятие бьёт весомее обычного хода. */
+    /* Стук шашки о доску. Бой звучит весомее простого хода. */
     move(capture) {
       if (!enabled) return;
       const ac = context();
@@ -162,19 +162,8 @@
       knock(capture ? 0.34 : 0.22);
     },
 
-    /* Шах — коротко и тревожно, две ноты вверх. */
-    check() {
-      play([[880, AFTER_KNOCK, 0.13, 0.18], [1174, AFTER_KNOCK + 0.11, 0.18, 0.16]]);
-    },
-
-    /* Гарде — мягче шаха: одна предупреждающая нота, ниже и глуше,
-       чтобы на слух не путать её с шахом. */
-    guarde() {
-      play([[587, AFTER_KNOCK, 0.22, 0.13]], 'sine');
-    },
-
-    /* Мат — нисходящая фраза, слышно, что партия окончена. */
-    checkmate() {
+    /* Конец партии вничью или вдвоём — нейтральная нисходящая фраза. */
+    gameOver() {
       play([[698, AFTER_KNOCK, 0.16, 0.18],
             [587, AFTER_KNOCK + 0.15, 0.16, 0.18],
             [440, AFTER_KNOCK + 0.30, 0.42, 0.20]]);

@@ -25,7 +25,7 @@
   [
     'board', 'moves', 'statusTitle', 'statusSub', 'statusIcon', 'engineNote',
     'level', 'levelHint', 'sideSelect', 'modeSelect',
-    'aiOptions', 'localOptions', 'onlineOptions', 'autoFlipSelect',
+    'aiOptions', 'localOptions', 'onlineOptions', 'soundSelect', 'autoFlipSelect',
     'newGame', 'undo', 'flip', 'resign',
     'creditsLine', 'creditsAmount', 'creditsGet',
     'adOverlay', 'adTitle', 'adText', 'adWatch', 'adClose',
@@ -337,6 +337,16 @@
     return status;
   }
 
+  /* Правильное окончание: 1 ход, 2 хода, 5 ходов */
+  function movesWord(n) {
+    const two = n % 100;
+    if (two >= 11 && two <= 14) return 'ходов';
+    const one = n % 10;
+    if (one === 1) return 'ход';
+    if (one >= 2 && one <= 4) return 'хода';
+    return 'ходов';
+  }
+
   function showEnd(status) {
     let title, text, icon;
 
@@ -361,18 +371,34 @@
       }[status.reason] || 'Партия завершена вничью.';
     } else {
       const winnerName = status.result === 'w' ? 'Белые' : 'Чёрные';
-      const how = status.reason === 'wiped'
+      const loserName = status.result === 'w' ? 'чёрных' : 'белых';
+      const wiped = status.reason === 'wiped';
+      // Формулировка зависит от того, кто читает: победитель, проигравший или зритель
+      const howForWinner = wiped
         ? 'У соперника не осталось шашек.'
         : 'Сопернику нечем ходить — все шашки заперты.';
+      const howForLoser = wiped
+        ? 'У вас не осталось шашек.'
+        : 'Вам нечем ходить — все шашки заперты.';
+      const howNeutral = wiped
+        ? 'У ' + loserName + ' не осталось шашек.'
+        : 'У ' + loserName + ' не осталось ходов — все шашки заперты.';
+      const how = howForWinner;
       if (state.mode === 'local') {
         title = winnerName + ' победили';
-        text = how;
+        text = howNeutral;
         icon = '👑';
       } else {
         const iWon = controls(status.result);
+        const moves = Math.ceil(state.moveList.length / 2);
         title = iWon ? 'Победа!' : 'Поражение';
-        text = how;
-        icon = iWon ? '👑' : '💀';
+        if (iWon) {
+          text = howForWinner + (moves <= 12 ? ' Разгром за ' + moves + ' ' + movesWord(moves) + '!' : '');
+          icon = '👑';
+        } else {
+          text = howForLoser + (moves <= 12 ? ' Вас разгромили за ' + moves + ' ' + movesWord(moves) + '.' : '');
+          icon = moves <= 12 ? '🙈' : '😅';
+        }
       }
     }
 
@@ -469,8 +495,19 @@
       layoutBoard();
     }
 
+    const sound = window.CheckersSound;
+    if (sound) sound.move(!!(result.move.captured && result.move.captured.length));
+
     const status = refreshAll();
-    if (status.over) return result;
+    if (status.over) {
+      if (sound) {
+        // Вдвоём за одним устройством подтрунивать не над кем — нейтральный сигнал
+        if (state.mode === 'local' || status.result === 'draw') sound.gameOver();
+        else if (controls(status.result)) sound.victory();
+        else sound.defeat();
+      }
+      return result;
+    }
 
     if (state.mode === 'ai' && state.game.turn !== state.human) scheduleComputerMove();
     return result;
@@ -1109,6 +1146,17 @@
     }
   });
 
+  onSegment(el.soundSelect, data => {
+    if (window.CheckersSound) window.CheckersSound.enabled = data.sound === 'on';
+  });
+
+  // Кнопка должна показывать выбор с прошлого запуска, а не значение из разметки
+  if (window.CheckersSound && el.soundSelect) {
+    const wanted = window.CheckersSound.enabled ? 'on' : 'off';
+    const saved = el.soundSelect.querySelector('[data-sound="' + wanted + '"]');
+    if (saved) selectSegment(el.soundSelect, saved);
+  }
+
   el.newGame.addEventListener('click', () => newGame());
   el.endNewGame.addEventListener('click', () => newGame());
   el.undo.addEventListener('click', undoMove);
@@ -1116,6 +1164,7 @@
   el.adWatch.addEventListener('click', watchAd);
   el.adClose.addEventListener('click', () => el.adOverlay.classList.remove('open'));
   Credits.onChange(refreshCredits);
+  window.addEventListener('darkside-ads-ready', refreshCredits);
   el.resign.addEventListener('click', () => {
     if (state.finished) return;
     if (confirm('Сдаться и завершить партию?')) resign();

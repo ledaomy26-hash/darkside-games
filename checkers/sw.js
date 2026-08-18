@@ -2,7 +2,7 @@
    Держит оболочку игры в кэше, чтобы приложение открывалось без интернета.
    Запросы к /api/ (комнаты для онлайн-игры) всегда идут в сеть. */
 
-const CACHE = 'dark-side-checkers-v2';
+const CACHE = 'dark-side-checkers-v4';
 
 // Оболочка приложения: без этих файлов игра не запустится
 const SHELL = [
@@ -14,6 +14,7 @@ const SHELL = [
   './net.js',
   './app.js',
   './credits.js',
+  './sound.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
