@@ -418,6 +418,60 @@ const НОВЫЕ_ТВАРИ = {
     глаза: { цвет: 0x5cc8ff, радиус: 0.006, ореол: 3.5,
       точки: [[-0.033, 0.897, 0.037], [-0.016, 0.897, 0.045]] },
     кости: КОСТИ_ТВАРЕЙ.statue
+  },
+  /* Три твари замка из очереди 06–08.10.2026, в игру 09.10. Пересобраны
+     без ужатия (95–99 тыс. треугольников, раскраска 2048; ужатые —
+     *.glb.до-09-10). Места глаз — по вершинам с раскраской.
+
+     Дама в белом: рваное платье со шлейфом, чёрные волосы, венец, свеча
+     в вытянутой левой руке. Глаза на модели тёмные — зажжены бледно-голубые,
+     как у призрака: глазницы на 0,921 роста (нос 0,91, z 0,114). Свеча —
+     x −0,087, верх 0,83, z 0,22: огонь на кости руки. */
+  lady: {
+    файл: 'дама', рост: 2.3, свет: 0xbfe8ff, движение: 'дама',
+    /* Платье белое, как бинты мумии, — свечения меньше, иначе выгорит. */
+    свечение: 0.32, кромка: 0.1, контур: 0.0055, ореол: { сила: 0.12, глубина: 0.45 },
+    /* 0,005 и ореол 3,5 давали белую маску на всё лицо (снимок 09.10). */
+    глаза: { цвет: 0x8fd0ff, радиус: 0.0035, ореол: 2.2,
+      точки: [[-0.014, 0.921, 0.098], [0.02, 0.921, 0.098]] },
+    огни: { цвет: 0xffc46a, сердце: 0xfff3d6,
+      точки: [[-0.087, 0.845, 0.222, 0.03, 'рука-свеча']] },
+    кости: КОСТИ_ТВАРЕЙ.lady
+  },
+  /* Горгулья: камень во мху, рога, крылья, когти вперёд. 0,76 × 1 × 0,64 —
+     при 2,3 м вышла бы шириной в дорожку (1,74 м), а вблизи она ещё
+     раскрывает крылья: рост 2,1 (1,59 м). Глаза оранжевые на модели —
+     0,843 роста, x −0,015 и 0,018, z 0,14. Имя файла не «горгулья»:
+     так зовётся каменная горгулья обочины, модели хранятся по имени. */
+  gargoyle: {
+    файл: 'горгулья-живая', рост: 2.1, свет: 0xff7a1a, движение: 'горгулья',
+    свечение: 0.28, кромка: 0.08, контур: 0.0055, ореол: { сила: 0.12, глубина: 0.45 },
+    /* 0,008 из камеры почти не видно (снимок 09.10) — крупнее. */
+    глаза: { цвет: 0xff7a1a, радиус: 0.011, ореол: 4.5,
+      точки: [[-0.015, 0.843, 0.142], [0.018, 0.842, 0.14]] },
+    кости: КОСТИ_ТВАРЕЙ.gargoyle
+  },
+  /* Палач: чёрный капюшон, фартук, наручи, цепи, топор на плече. Глаза —
+     в прорезях капюшона, на модели красноватые: 0,857 роста, x −0,018
+     и 0,017, z 0,125. */
+  executioner: {
+    файл: 'палач', рост: 2.3, свет: 0xff3020, движение: 'палач',
+    свечение: 0.45, кромка: 0.14, контур: 0.0055, ореол: { сила: 0.12, глубина: 0.45 },
+    глаза: { цвет: 0xff3020, радиус: 0.006, ореол: 3.5,
+      точки: [[-0.018, 0.857, 0.124], [0.017, 0.856, 0.125]] },
+    кости: КОСТИ_ТВАРЕЙ.executioner
+  },
+  /* Шут — из очереди 09.10.2026 (07:01), в игру в тот же день. Пересобран
+     без ужатия (95,9 тыс. треугольников, 2048; ужатый — шут.glb.до-09-10).
+     Колпак с бубенцами, рваный красно-чёрный камзол, серпы в обеих руках.
+     Глаза зелёные и на картинке, и на модели — по зелёным вершинам: 0,873
+     роста, x −0,015 и 0,009, передний край z 0,05. */
+  jester: {
+    файл: 'шут', рост: 2.3, свет: 0x6aff6a, движение: 'шут',
+    свечение: 0.45, кромка: 0.14, контур: 0.0055, ореол: { сила: 0.12, глубина: 0.45 },
+    глаза: { цвет: 0x6aff6a, радиус: 0.006, ореол: 3.5,
+      точки: [[-0.015, 0.873, 0.045], [0.009, 0.872, 0.045]] },
+    кости: КОСТИ_ТВАРЕЙ.jester
   }
 };
 
@@ -432,7 +486,10 @@ const КАМЕНЬ_МОДЕЛИ = {
   'плита-готика': { разворот: Math.PI }, // стрельчатая плита с резным окном и пинаклями
   'плита-череп': { разворот: Math.PI },  // плита с крылатым черепом — memento mori
   'плита-кельтский': { разворот: Math.PI }, // кельтский крест с кольцом (19.09, поздно вечером)
-  'плита-крест': { разворот: Math.PI }   // крест с трилистниками на ступенчатом основании
+  'плита-крест': { разворот: Math.PI },  // крест с трилистниками на ступенчатом основании
+  /* Ещё два с той же картинки 19.09 — сделаны 09.10.2026 (хвост паспорта). */
+  'плита-скол': { разворот: Math.PI },   // плита с отбитым углом и трещиной, во мху
+  'плита-обелиск': { разворот: Math.PI } // обелиск на постаменте с филёнками
 };
 
 /* ---------- Рисованная обочина ----------
@@ -797,7 +854,11 @@ const MONSTER_MODELS = {
   miner: 'Zombie',
   golem: 'Skeleton_Warrior',
   armor: 'Skeleton_Warrior',
-  statue: 'Skeleton_Warrior'
+  statue: 'Skeleton_Warrior',
+  lady: 'Skeleton_Mage',
+  gargoyle: 'Wolf',
+  executioner: 'Skeleton_Warrior',
+  jester: 'Skeleton_Rogue'
 };
 
 /* Обличий-подмен больше нет (23.09.2026). До этого дня каждый наряд лавки
@@ -3373,7 +3434,12 @@ export class Renderer {
       miner: { рост: 2.30, поза: 'walk', момент: 0.30, глубина: 0, наклон: 0, глаза: 0xe8f0a0 },
       golem: { рост: 2.30, поза: 'idle', момент: 0.30, глубина: 0, наклон: 0, глаза: 0xffa030 },
       armor: { рост: 2.30, поза: 'idle', момент: 0.30, глубина: 0, наклон: 0, глаза: 0x5c8cff },
-      statue: { рост: 2.30, поза: 'idle', момент: 0.30, глубина: 0, наклон: 0, глаза: 0x5cc8ff }
+      statue: { рост: 2.30, поза: 'idle', момент: 0.30, глубина: 0, наклон: 0, глаза: 0x5cc8ff },
+      /* Дама, горгулья, палач (09.10.2026). */
+      lady: { рост: 2.30, поза: 'idle', момент: 0.30, глубина: 0, наклон: 0, глаза: 0xbfe8ff },
+      gargoyle: { рост: 2.10, поза: 'idle', момент: 0.30, глубина: 0, наклон: 0, глаза: 0xff7a1a },
+      executioner: { рост: 2.30, поза: 'idle', момент: 0.30, глубина: 0, наклон: 0, глаза: 0xff3020 },
+      jester: { рост: 2.30, поза: 'idle', момент: 0.30, глубина: 0, наклон: 0, глаза: 0x6aff6a }
     };
 
     const monsterPool = kind => new Pool(() => {
@@ -3416,7 +3482,9 @@ export class Renderer {
         warlock: [0x2a1f4a, 0.45], mummy: [0xb8a47a, 0.40],
         spider: [0x2a2320, 0.55], reaper: [0x1e2230, 0.50],
         hound: [0x2a1a14, 0.55], miner: [0x4a5a3a, 0.35],
-        golem: [0x5a5f4a, 0.30], armor: [0x2a2a30, 0.45], statue: [0x8a8f88, 0.25]
+        golem: [0x5a5f4a, 0.30], armor: [0x2a2a30, 0.45], statue: [0x8a8f88, 0.25],
+        lady: [0xd8d4cc, 0.25], gargoyle: [0x7a8070, 0.25], executioner: [0x2a1e1a, 0.45],
+        jester: [0x3a1418, 0.40]
       }[kind];
       model.traverse(node => {
         if (!node.isMesh || !node.material) return;
@@ -3576,6 +3644,10 @@ export class Renderer {
       monsterGolem: monsterPool('golem'),
       monsterArmor: monsterPool('armor'),
       monsterStatue: monsterPool('statue'),
+      monsterLady: monsterPool('lady'),
+      monsterGargoyle: monsterPool('gargoyle'),
+      monsterExecutioner: monsterPool('executioner'),
+      monsterJester: monsterPool('jester'),
 
       coffin: new Pool(() => { const g = новыйГроб(); self.scene.add(g); return g; }),
       graveBorder: modelPool('floor_dirt_grave', 0.14, { w: 1.66, d: 1 }),
@@ -3618,6 +3690,8 @@ export class Renderer {
       sideGraveSkull: new Pool(() => self.каменнаяФигура('плита-череп', 1.3)),
       sideGraveCeltic: new Pool(() => self.каменнаяФигура('плита-кельтский', 1.7)),
       sideGraveCross: new Pool(() => self.каменнаяФигура('плита-крест', 1.6)),
+      sideGraveChipped: new Pool(() => self.каменнаяФигура('плита-скол', 1.35)),
+      sideObelisk: new Pool(() => self.каменнаяФигура('плита-обелиск', 2.3)),
 
       /* Ряд третий: склепы, святилища, столбы. */
       sideCrypt: sidePool('crypt', 3.40),
@@ -5210,6 +5284,45 @@ export class Renderer {
       rx = -ожила * 0.07;
       rz = ожила * Math.sin(time * 37 + z) * 0.006;
       dy = ожила * Math.abs(Math.sin(time * 41 + z)) * 0.006;
+    } else if (вид === 'дама') {
+      /* Дама в белом — призрак: не стоит, а висит над полом, подол едва
+         касается камня; медленно плывёт вверх-вниз и поводит головой.
+         Бегун ближе 16 м — она поворачивается к нему, подаётся вперёд
+         и поднимает свечу (кость), пламя разгорается (09.10.2026). */
+      const заметила = плавно(16, 7, до);
+      ry = Math.sin(time * 0.45 + z) * 0.12 * (1 - заметила) + заметила * Math.sin(time * 0.7 + z) * 0.06;
+      rx = -заметила * 0.06;
+      rz = Math.sin(time * 0.8 + z) * 0.02;
+      dy = 0.05 + Math.sin(time * 0.9 + z) * 0.04;
+      this.дрожатьОгням(model, time + z, 0.9 + заметила * 0.5);
+    } else if (вид === 'горгулья') {
+      /* Горгулья, как статуя, издали — камень. Бегун ближе 16 м — оживает:
+         пригибается, раскрывает крылья и бьёт ими (кости), подпрыгивает
+         в такт взмахам, будто вот-вот сорвётся с места (09.10.2026). */
+      const ожила = плавно(16, 7, до);
+      ry = ожила * Math.sin(time * 1.1 + z) * 0.10;
+      rx = -ожила * 0.08;
+      dy = ожила * (Math.abs(Math.sin(time * 3.0 + z)) * 0.05 - 0.02);
+    } else if (вид === 'шут') {
+      /* Шут не стоит на месте: пританцовывает, подпрыгивает с ноги на ногу,
+         голова дёргается вбок, будто он хихикает. Бегун ближе 15 м —
+         скачет чаще и выше, подаётся вперёд, серпы мелькают (кости)
+         (09.10.2026). */
+      const рядом = плавно(15, 7, до);
+      const такт = time * (3.2 + рядом * 2.5) + z;
+      dy = Math.abs(Math.sin(такт)) * (0.05 + рядом * 0.05);
+      rz = Math.sin(такт) * 0.08;
+      ry = Math.sin(time * 1.3 + z) * 0.15 + Math.round(Math.sin(time * 2.1 + z) * 2) / 2 * 0.06;
+      rx = -рядом * 0.08;
+    } else if (вид === 'палач') {
+      /* Палач стоит тяжело, вразвалку: грудь ходит, плечи покачиваются под
+         топором. Бегун ближе 15 м — подаётся вперёд, топор взлетает над
+         головой и рубит (кость), правая рука тянется схватить (09.10.2026). */
+      const рядом = плавно(15, 7, до);
+      ry = Math.sin(time * 0.6 + z) * 0.08 * (1 - рядом) + рядом * Math.sin(time * 0.9 + z) * 0.05;
+      rz = Math.sin(time * 1.2 + z) * 0.03;
+      rx = -рядом * 0.06;
+      dy = Math.sin(time * 1.4 + z) * 0.012;
     } else if (вид === 'парящий') {
       /* Висит и живёт: медленно поворачивается, будто высматривает бегуна,
          кренится и заметно всплывает-опускается. Прежнее лёгкое покачивание
@@ -5280,7 +5393,8 @@ export class Renderer {
   drawObstacles(world, time, dt) {
     const active = ['grave', 'crypt', 'monsterZombie', 'monsterSkeleton', 'monsterVampire',
       'monsterWerewolf', 'monsterDracula', 'monsterWarlock', 'monsterMummy', 'monsterSpider', 'monsterReaper',
-      'monsterHound', 'monsterMiner', 'monsterGolem', 'monsterArmor', 'monsterStatue', 'hearse', 'pitAcid', 'pitSpikes', 'pitGrave',
+      'monsterHound', 'monsterMiner', 'monsterGolem', 'monsterArmor', 'monsterStatue',
+      'monsterLady', 'monsterGargoyle', 'monsterExecutioner', 'monsterJester', 'hearse', 'pitAcid', 'pitSpikes', 'pitGrave',
       'archway', 'duckHint',
       'coffin', 'graveBorder', ...(this.видыНадгробий || []), ...(this.видыСклепов || []),
       ...(this.видыВорот || [])];
@@ -5294,7 +5408,8 @@ export class Renderer {
       dracula: 'monsterDracula', warlock: 'monsterWarlock', mummy: 'monsterMummy',
       spider: 'monsterSpider', reaper: 'monsterReaper',
       hound: 'monsterHound', miner: 'monsterMiner', golem: 'monsterGolem', armor: 'monsterArmor',
-      statue: 'monsterStatue'
+      statue: 'monsterStatue', lady: 'monsterLady', gargoyle: 'monsterGargoyle',
+      executioner: 'monsterExecutioner', jester: 'monsterJester'
     };
 
     for (const o of world.track.obstacles) {
@@ -5442,7 +5557,7 @@ export class Renderer {
       ...ЦВЕТА_ФОНАРЕЙ.map(ц => 'lamp-' + ц.имя),
       'sideSkull', 'gateArch', ...Object.keys(СВОДЫ), 'sideAngel', 'sideGargoyle', 'sideChapel', 'обелиск',
       'дерево-0', 'дерево-1', 'дерево-2', 'дерево-3', 'sideGraveGothic', 'sideGraveSkull',
-      'sideGraveCeltic', 'sideGraveCross',
+      'sideGraveCeltic', 'sideGraveCross', 'sideGraveChipped', 'sideObelisk',
       ...ВИДЫ_НАДГРОБИЙ.map(в => 'надгробие-' + в),
       ...Object.keys(this.карты || {}).map(n => 'карта-' + n)];
     for (const key of keys) this.pools[key].begin();
@@ -5519,7 +5634,8 @@ export class Renderer {
     const nearItems = ['надгробие-плита', 'sideGraveGothic', 'sideGraveCross',
       'sideGraveCeltic', 'sideGraveSkull', 'надгробие-плита', 'надгробие-крест',
       'надгробие-готика', 'sideAngel', 'sideGargoyle', 'sideGraveGothic', 'sideGraveCeltic',
-      'sideGraveSkull', 'надгробие-обелиск', 'sideGraveCross'];
+      'sideGraveSkull', 'надгробие-обелиск', 'sideGraveCross', 'sideGraveChipped', 'sideObelisk',
+      'sideGraveChipped'];
     from = Math.floor((world.z - 12 - позади) / NEAR_STEP) * NEAR_STEP;
     for (let z = from; !подземные && z < world.z + NEAR_VIEW; z += NEAR_STEP) {
       for (const side of [-1, 1]) {

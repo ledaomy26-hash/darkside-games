@@ -157,8 +157,9 @@
   /* С 04.10.2026 ещё адская гончая и мертвец-рудокоп (подземелье), каменный
      голем и ожившие доспехи (замок) — из очереди 01–04.10. */
   /* С 05.10.2026 ещё ожившая статуя ангела (замок). */
+  /* С 09.10.2026 ещё дама в белом, горгулья, палач и шут (замок). */
   const MONSTER_KINDS = ['zombie', 'skeleton', 'werewolf', 'dracula', 'warlock', 'mummy', 'spider', 'reaper',
-    'hound', 'miner', 'golem', 'armor', 'statue'];
+    'hound', 'miner', 'golem', 'armor', 'statue', 'lady', 'gargoyle', 'executioner', 'jester'];
 
   /* У каждой трассы своя нечисть (владелец 29.09.2026). Кладбище — зомби,
      скелет с мечом, оборотень, вампир и колдун; вампир у нас — это Дракула
@@ -172,8 +173,9 @@
     кладбище: ['zombie', 'skeleton', 'werewolf', 'dracula', 'warlock'],
     подземелье: ['mummy', 'spider', 'reaper', 'hound', 'miner'],
     /* Замок (04.10.2026): голем и доспехи — первые свои; вампир (Дракула
-       в плаще) у себя дома; с 05.10 — статуя ангела. Дама, горгулья, палач, шут — в очереди. */
-    замок: ['golem', 'armor', 'statue', 'dracula']
+       в плаще) у себя дома; с 05.10 — статуя ангела; с 09.10 — дама в белом,
+       горгулья, палач, шут. */
+    замок: ['golem', 'armor', 'statue', 'dracula', 'lady', 'gargoyle', 'executioner', 'jester']
   };
 
   function твариМеста(место) {
@@ -251,17 +253,29 @@
       /* Промежуток между рядами больше длины прыжка: при 27 м/с бегун летит
          около 24 м, а прежний промежуток начинался с 24 — он перепрыгивал
          один ряд и падал прямо на следующий (20.09.2026, зерно 45). */
-      const gap = Math.max(20, speed * 1.25) * (0.85 + rnd() * 0.5);
+      /* Чем дальше, тем сложнее — до 10 км, а не до 2 (09.10.2026, владелец:
+         «в начале трассы их немного, но чем дальше бежишь, тем должно быть
+         их больше и сложнее; твари и препятствия должны быть пропорциональны
+         друг другу»). Прежде плотность упиралась в потолок на 2 км, и дальше
+         трасса не менялась; тварь была одним видом из шести — 7 тварей на
+         45 прочих препятствий на километр. Теперь растут: доля тварей среди
+         преград, число занятых дорожек, препятствия на свободной дорожке,
+         перестроения и частота связок. Нижняя граница промежутка — та же:
+         она держит проходимость (длина прыжка от скорости). */
+      const k = Math.min(1, z / 10000);
+      const gap = Math.max(20, speed * 1.25) * (0.85 + rnd() * 0.5 * (1 - 0.6 * k));
 
       /* Свободная дорожка — соседняя с прошлой или та же: за один промежуток
-         бегун успевает сместиться на одну, но не через всю трассу. */
-      const shift = rnd() < 0.55 ? 0 : (rnd() < 0.5 ? -1 : 1);
+         бегун успевает сместиться на одну, но не через всю трассу. Дальше
+         по трассе она чаще перескакивает — больше перестроений. */
+      const shift = rnd() < 0.55 - 0.25 * k ? 0 : (rnd() < 0.5 ? -1 : 1);
       let safe = this.lastSafeLane + shift;
       if (safe < -1) safe = 0;
       if (safe > 1) safe = 0;
 
-      const density = Math.min(0.85, 0.35 + z / 4000);   // дальше — теснее
-      const kinds = ['grave', 'web', 'crypt', 'hearse', 'zombie', 'pit'];
+      const density = Math.min(0.95, 0.35 + z / 5000);   // дальше — теснее
+      const долятварей = 0.3 + 0.37 * k;                  // 30 % в начале, две трети к 10 км
+      const kinds = ['grave', 'web', 'crypt', 'hearse', 'pit'];
       const passable = ['grave', 'web', 'pit'];          // берутся действием, не объездом
       let longest = 0;
 
@@ -269,14 +283,14 @@
         if (lane === safe) {
           /* На свободной дорожке допустимо препятствие с выходом: прыжок
              или подкат. Так бег остаётся живым, а трасса — проходимой. */
-          if (rnd() < 0.45) {
+          if (rnd() < 0.45 + 0.35 * k) {
             const kind = passable[Math.floor(rnd() * passable.length)];
             longest = Math.max(longest, this.place(z, lane, kind));
           }
           continue;
         }
         if (rnd() > density) continue;
-        const kind = kinds[Math.floor(rnd() * kinds.length)];
+        const kind = rnd() < долятварей ? 'zombie' : kinds[Math.floor(rnd() * kinds.length)];
         longest = Math.max(longest, this.place(z, lane, kind));
       }
 
@@ -468,6 +482,41 @@
       }
     }
 
+    /* Пока крылья ждут свободного места над препятствием (holdWings, до
+       WINGS_HOLD), бегун висит наверху, а дорожка монет рассчитана на
+       обычный полёт и уже кончилась — летишь пустым. С 09.10.2026 трасса
+       к дальним метрам плотнее, и ждать приходится чаще (проверка полёта,
+       зерно 13: 18 м без монет перед посадкой). Монеты досыпаются впереди
+       по дорожке бегуна, на высоте полёта, шагом как у воздушной дорожки. */
+    досыпатьНебо(z, speed, lane) {
+      let край = z + speed * 0.5;
+      for (const p of this.pickups) {
+        if (!p.sky || p.taken || p.z <= z) continue;
+        /* Монеты посадки по расчёту уже спускаются, а бегун ещё висит
+           наверху и пролетел бы над ними, — поднимаем их к нему. */
+        p.y = Math.max(p.y, WINGS_Y + Math.sin(p.z * 0.4) * 0.28);
+        if (p.z > край) край = p.z;
+      }
+      for (let zz = край + 1.7; zz < z + speed * 0.9; zz += 1.7) {
+        this.pickups.push({
+          kind: 'coin', lane, z: zz, y: WINGS_Y + Math.sin(zz * 0.4) * 0.28, sky: true, taken: false
+        });
+      }
+    }
+
+    /* Ожидание кончилось, бегун идёт вниз по кривой y·e^(−7t) (applyVertical) —
+       монеты впереди опускаются по ней же. Дошедшие до высоты бега ложатся
+       на землю обычными: их берут уже после посадки, а в воздухе над
+       бегуном ничего не висит. */
+    опуститьНебо(z0, speed, y0) {
+      const крутизна = 7 / Math.max(1, speed);
+      for (const p of this.pickups) {
+        if (!p.sky || p.taken || p.z <= z0) continue;
+        const h = y0 * Math.exp(-(p.z - z0) * крутизна);
+        if (h <= 0.85) { p.y = 0.85; p.sky = false; } else p.y = Math.min(p.y, h);
+      }
+    }
+
     /* Препятствия в окне пути — для столкновений и для отрисовки. */
     near(fromZ, toZ) {
       const out = [];
@@ -562,6 +611,16 @@
       return true;
     }
 
+    /* Воздушная дорожка на полёт. Скорость — средняя за полёт, а не текущая:
+       взятые на рывке крылья (скорость ×1,55) прежде давали дорожку на всю
+       скорость рывка, рывок гас раньше полёта, и хвост монет висел в воздухе
+       за точкой посадки (проверка полёта на 40 трассах, 09.10.2026). */
+    поднятьМонеты(flight) {
+      const рывок = Math.min(this.powers.dash, flight);
+      const средняя = speedAt(this.z) * (DASH_SPEED * рывок + (flight - рывок)) / flight;
+      this.track.liftCoins(this.z, рывок > 0 ? средняя : this.speed, flight, WINGS_Y);
+    }
+
     powerTime(kind) {
       return POWER_BASE[kind] + POWER_PER_LEVEL * (this.levels[kind] || 0);
     }
@@ -636,7 +695,20 @@
 
       for (const kind of Object.keys(this.powers)) {
         if (this.powers[kind] <= 0) continue;
-        if (kind === 'wings' && this.holdWings(dt)) continue;
+        if (kind === 'wings' && this.holdWings(dt)) {
+          /* Досыпать — только пока он наверху: ожидание бывает и на снижении
+             у самой земли, и монеты в трёх метрах над ним там ни к чему. */
+          if (this.y > WINGS_Y - 0.3) {
+            this.track.досыпатьНебо(this.z, this.speed, this.lane);
+            this.ждётМеста = true;
+          }
+          continue;
+        }
+        /* Дождался — снижается: досыпанные впереди монеты опускаются вместе с ним. */
+        if (kind === 'wings' && this.ждётМеста) {
+          this.ждётМеста = false;
+          this.track.опуститьНебо(this.z, this.speed, this.y);
+        }
         this.powers[kind] = Math.max(0, this.powers[kind] - dt);
         if (this.powers[kind] === 0) {
           if (kind === 'wings') this.grace = WINGS_GRACE;
@@ -937,8 +1009,7 @@
           if (p.kind === 'wings') {
             this.wingsHold = 0;
             this.wingsLanding = false;
-            const flight = this.powerTime('wings');
-            this.track.liftCoins(this.z, this.speed, flight, WINGS_Y);
+            this.поднятьМонеты(this.powerTime('wings'));
           }
           this.powers[p.kind] = this.powerTime(p.kind);
           this.events.push({ type: 'power', kind: p.kind });
