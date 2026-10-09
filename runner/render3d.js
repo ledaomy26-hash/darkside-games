@@ -2550,6 +2550,290 @@ export class Renderer {
   }
 
   /* Крылья на кадре: взмах, наклон и гаснущий след. */
+  /* ---------- Вещи из лавки на экране (09.10.2026) ----------
+
+     Крышка гроба под ногами, катафалк под бегуном на форе, летучая мышь,
+     след и свечение. Собирается лениво, при первом кадре с вещью: материалы
+     дерева и золота заводятся вместе с препятствиями. Свечение — спрайты,
+     а не свет: новый источник света перестроил бы все материалы сцены. */
+  вещиСобрать() {
+    if (this.вещи) return this.вещи;
+    const в = this.вещи = {};
+
+    /* Мягкое пятно для следа и ореола — рисуется один раз на холсте. */
+    const холст = document.createElement('canvas');
+    холст.width = холст.height = 64;
+    const к = холст.getContext('2d');
+    const г = к.createRadialGradient(32, 32, 0, 32, 32, 32);
+    г.addColorStop(0, 'rgba(255,255,255,1)');
+    г.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+    г.addColorStop(1, 'rgba(255,255,255,0)');
+    к.fillStyle = г;
+    к.fillRect(0, 0, 64, 64);
+    в.пятно = new THREE.CanvasTexture(холст);
+    const мягкий = цвет => new THREE.SpriteMaterial({
+      map: в.пятно, color: цвет, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+    });
+
+    /* Крышка гроба: тот же гроб, что на обочине, сплющенный в доску. */
+    const гр = гроб();
+    в.крышка = new THREE.Group();
+    const доска = new THREE.Group();
+    доска.add(new THREE.Mesh(гр.дерево, this.деревоMat || new THREE.MeshLambertMaterial({ color: 0x1e1612 })));
+    доска.add(new THREE.Mesh(гр.золото, this.золотоMat || new THREE.MeshLambertMaterial({ color: 0xc9a24a })));
+    доска.scale.set(0.95, 0.16, 0.8);
+    доска.rotation.y = Math.PI / 2;      // гроб вытянут по x — доска идёт вдоль бега
+    в.крышка.add(доска);
+    в.крышкаСвет = new THREE.Sprite(мягкий(0xd6b27a));
+    в.крышкаСвет.scale.set(1.6, 0.5, 1);
+    в.крышкаСвет.position.y = -0.05;
+    в.крышка.add(в.крышкаСвет);
+    в.крышка.visible = false;
+    this.scene.add(в.крышка);
+
+    /* Катафалк форы — те же траурные дроги, что на трассе. */
+    const кт = this.катафалкСетки || (this.катафалкСетки = катафалк());
+    в.катафалк = new THREE.Group();
+    в.катафалк.add(new THREE.Mesh(кт.дерево, this.деревоMat));
+    в.катафалк.add(new THREE.Mesh(кт.золото, this.золотоMat));
+    в.катафалк.add(new THREE.Mesh(кт.стекло, this.стеклоMat));
+    в.катафалк.add(new THREE.Mesh(кт.железо, this.ironMat));
+    в.катафалкСвет = new THREE.Sprite(мягкий(0xff8a3a));
+    в.катафалкСвет.scale.set(4, 1.6, 1);
+    в.катафалкСвет.position.set(0, 0.4, -4.6);
+    в.катафалк.add(в.катафалкСвет);
+    в.катафалк.visible = false;
+    this.scene.add(в.катафалк);
+
+    /* Летучая мышь: тельце, уши, перепонки с картинки крыла, красные глаза. */
+    в.мышь = new THREE.Group();
+    const чёрный = new THREE.MeshBasicMaterial({ color: 0x0b0a10 });
+    const тело = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), чёрный);
+    тело.scale.set(1, 1.25, 1);
+    в.мышь.add(тело);
+    for (const s of [-1, 1]) {
+      const ухо = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.1, 6), чёрный);
+      ухо.position.set(s * 0.05, 0.16, 0);
+      в.мышь.add(ухо);
+      const глаз = new THREE.Sprite(мягкий(0xff2a3a));
+      глаз.scale.setScalar(0.07);
+      глаз.position.set(s * 0.035, 0.07, 0.1);
+      в.мышь.add(глаз);
+    }
+    в.мышьКрылья = [];
+    const tex = this.текстурыПрепятствий && this.текстурыПрепятствий['крыло-раскрыто'];
+    const ВЫС = 0.3, ШИР = tex ? ВЫС * tex.image.width / tex.image.height : 0.5;
+    const гео = new THREE.PlaneGeometry(ШИР, ВЫС);
+    гео.translate(-ШИР / 2, 0, 0);
+    const мат = tex
+      ? new THREE.MeshBasicMaterial({ map: tex, color: 0x6a5060, transparent: true, depthWrite: false, side: THREE.DoubleSide })
+      : new THREE.MeshBasicMaterial({ color: 0x1a1018, side: THREE.DoubleSide });
+    for (const s of [-1, 1]) {
+      const к = new THREE.Group();
+      к.add(new THREE.Mesh(гео, мат));
+      к.scale.x = -s;
+      к.position.x = s * 0.06;
+      в.мышь.add(к);
+      в.мышьКрылья.push({ к, s });
+    }
+    в.мышь.visible = false;
+    this.scene.add(в.мышь);
+
+    /* След — горсть огоньков, что остаются позади и гаснут. */
+    в.след = [];
+    for (let i = 0; i < 36; i++) {
+      const sp = new THREE.Sprite(мягкий(0xffffff));
+      sp.visible = false;
+      this.scene.add(sp);
+      в.след.push({ sp, жить: 0 });
+    }
+    в.следШаг = 0;
+    в.следИ = 0;
+
+    /* Свечение — ореол за спиной и пятно света под ногами. */
+    в.ореол = new THREE.Sprite(мягкий(0xffffff));
+    в.ореол.scale.set(2.2, 2.6, 1);
+    в.ореол.visible = false;
+    this.scene.add(в.ореол);
+    const пол = new THREE.Mesh(new THREE.CircleGeometry(1.1, 24), new THREE.MeshBasicMaterial({
+      map: в.пятно, color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    пол.rotation.x = -Math.PI / 2;
+    пол.visible = false;
+    this.scene.add(пол);
+    в.пол = пол;
+    return в;
+  }
+
+  /* Значок вещи для лавки (09.10.2026): вещь снимается отдельно, со своим
+     светом и прозрачным фоном — так в лавке та же крышка, тот же катафалк
+     и та же мышь, что на бегу. Сундук собран здесь же кодом, удвоитель —
+     монета «×2» на холсте. Зовёт tools/снимки-сцены.js (ЗНАЧКИ=1). */
+  значокВещи(id, n = 256) {
+    const в = this.вещиСобрать();
+    if (id === 'удвоитель') {
+      const х = document.createElement('canvas');
+      х.width = х.height = n;
+      const к = х.getContext('2d');
+      const г = к.createRadialGradient(n * 0.4, n * 0.35, n * 0.05, n / 2, n / 2, n * 0.42);
+      г.addColorStop(0, '#fff3b0'); г.addColorStop(0.55, '#fbbf24'); г.addColorStop(1, '#8a5a06');
+      к.fillStyle = г;
+      к.beginPath(); к.arc(n / 2, n / 2, n * 0.4, 0, Math.PI * 2); к.fill();
+      к.lineWidth = n * 0.035; к.strokeStyle = '#6b4204'; к.stroke();
+      к.fillStyle = '#3b2302';
+      к.font = `900 ${Math.round(n * 0.34)}px system-ui, sans-serif`;
+      к.textAlign = 'center'; к.textBaseline = 'middle';
+      к.fillText('×2', n / 2, n * 0.53);
+      return х.toDataURL('image/png');
+    }
+    const сцена = new THREE.Scene();
+    сцена.add(new THREE.AmbientLight(0xffffff, 1.4));
+    const св = new THREE.DirectionalLight(0xffe2c4, 2.4); св.position.set(2, 4, 5); сцена.add(св);
+    const зад = new THREE.DirectionalLight(0x8b5cf6, 1.4); зад.position.set(-4, 2, -3); сцена.add(зад);
+    let obj, взгляд;
+    if (id === 'крышка') {
+      obj = в.крышка.children[0].clone();
+      obj.scale.set(0.95, 0.5, 0.8);
+      взгляд = new THREE.Vector3(0.9, 1.6, 1.2);
+    } else if (id === 'фора') {
+      obj = в.катафалк.clone();
+      obj.remove(obj.children.find(c => c.isSprite));
+      взгляд = new THREE.Vector3(0.55, 0.5, 1.0);
+    } else if (id === 'мышь') {
+      obj = в.мышь.clone(true);
+      obj.visible = true;
+      obj.children.filter(c => c.isGroup).forEach((к, i) => к.rotation.set(0, (i ? 1 : -1) * 0.25, (i ? 1 : -1) * 0.35));
+      взгляд = new THREE.Vector3(0, 0.25, 1);
+    } else if (id === 'сундук') {
+      obj = new THREE.Group();
+      const дерево = this.деревоMat, золото = this.золотоMat;
+      const корпус = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 0.56), дерево);
+      корпус.position.y = 0.25;
+      obj.add(корпус);
+      const крышка = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.9, 20, 1, false, 0, Math.PI), дерево);
+      крышка.rotation.z = Math.PI / 2;
+      крышка.position.y = 0.5;
+      obj.add(крышка);
+      for (const sx of [-0.3, 0.3]) {
+        const полоса = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.52, 0.58), золото);
+        полоса.position.set(sx, 0.25, 0); obj.add(полоса);
+        const дуга = new THREE.Mesh(new THREE.TorusGeometry(0.285, 0.03, 6, 20, Math.PI), золото);
+        дуга.rotation.y = Math.PI / 2; дуга.position.set(sx, 0.5, 0); obj.add(дуга);
+      }
+      const замок = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.17, 0.05), золото);
+      замок.position.set(0, 0.46, 0.29); obj.add(замок);
+      const череп = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 10), this.костьMat || золото);
+      череп.position.set(0, 0.62, 0.22); obj.add(череп);
+      взгляд = new THREE.Vector3(0.75, 0.6, 1);
+    } else return null;
+    obj.visible = true;
+    obj.position.set(0, 0, 0);
+    obj.rotation.set(0, 0, 0);
+    сцена.add(obj);
+    const box = new THREE.Box3().setFromObject(obj);
+    const центр = box.getCenter(new THREE.Vector3()), размер = box.getSize(new THREE.Vector3());
+    const кам = new THREE.PerspectiveCamera(28, 1, 0.01, 200);
+    const даль = Math.max(размер.x, размер.y, размер.z) / (2 * Math.tan(THREE.MathUtils.degToRad(14))) *
+      ({ крышка: 1.3, фора: 0.9, сундук: 1.75, мышь: 1.3 }[id] || 1.3);   // дроги длинные — ближе
+    кам.position.copy(центр).add(взгляд.normalize().multiplyScalar(даль));
+    кам.lookAt(центр);
+    const р = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+    р.setSize(n, n);
+    р.setClearColor(0x000000, 0);
+    р.outputColorSpace = this.renderer.outputColorSpace;
+    р.render(сцена, кам);
+    const url = р.domElement.toDataURL('image/png');
+    р.dispose();
+    р.forceContextLoss();
+    return url;
+  }
+
+  /* Бегун на крышке гроба или на крыше катафалка — выше над мостовой. */
+  подставкаБегуна(world) {
+    if (this.укусС != null) return;
+    if (world.powers && world.powers.фора > 0) this.runnerRoot.position.y += 1.07;
+    else if (world.powers && world.powers.крышка > 0) this.runnerRoot.position.y += 0.14;
+  }
+
+  drawВещи(world, time, step) {
+    const p = world.powers || {};
+    const нужно = p.крышка > 0 || p.фора > 0 || world.мышьРядом || (world.красота &&
+      (world.красота.след || world.красота.свечение)) || this.вещи;
+    if (!нужно) return;
+    const в = this.вещиСобрать();
+    const x = sceneX(world.x), z = world.z, y = this.runnerRoot.position.y;
+    const укус = this.укусС != null;
+
+    /* Крышка под ногами, покачивается, как доска на волне. */
+    в.крышка.visible = p.крышка > 0 && !укус;
+    if (в.крышка.visible) {
+      в.крышка.position.set(x, y - 0.02, z + 0.1);
+      в.крышка.rotation.set(Math.sin(time * 5) * 0.05, this.runnerRoot.rotation.y, this.runnerRoot.rotation.z * 1.6);
+      в.крышкаСвет.material.opacity = p.крышка < 3 ? 0.4 + 0.4 * Math.abs(Math.sin(time * 9)) : 0.55;
+    }
+
+    /* Катафалк: бегун на крыше, дроги впереди и под ним. */
+    в.катафалк.visible = p.фора > 0 && !укус;
+    if (в.катафалк.visible) {
+      /* Бегун у заднего края крыши: дроги 9 м — при середине на 2,6 м впереди
+         задок заходил к камере и закрывал низ экрана (снимок 09.10). */
+      в.катафалк.position.set(x, y - 1.07 + Math.abs(Math.sin(time * 14)) * 0.03, z + 4.0);
+      в.катафалк.rotation.set(0, 0, this.runnerRoot.rotation.z * 0.5);
+      в.катафалкСвет.material.opacity = 0.5 + 0.3 * Math.sin(time * 20);
+    }
+
+    /* Мышь: вьётся у плеча, то слева, то справа, машет часто. */
+    в.мышь.visible = !!world.мышьРядом && !укус;
+    if (в.мышь.visible) {
+      const кр = Math.sin(time * 1.3);
+      /* У плеча, чуть позади: на 0,9 м впереди и на двух метрах она висела
+         над дорогой далеко перед бегуном (снимок 09.10). */
+      в.мышь.position.set(x + кр * 0.75, y + 1.75 + Math.sin(time * 3.1) * 0.1, z - 0.25 + Math.cos(time * 1.3) * 0.25);
+      в.мышь.rotation.set(0.2, Math.PI + кр * 0.6, -кр * 0.3);
+      const взмах = Math.sin(time * 22);
+      for (const { к, s } of в.мышьКрылья) к.rotation.set(0, s * 0.3, s * взмах * 0.8);
+    }
+
+    /* След: новый огонёк каждые 6 см пути, живёт 0,7 с, поднимается и гаснет. */
+    const кр = world.красота || {};
+    if (кр.след && !укус && world.speed > 0.5) {
+      в.следШаг += world.speed * (step || 1 / 60);
+      while (в.следШаг > 0.35) {
+        в.следШаг -= 0.35;
+        const о = в.след[в.следИ++ % в.след.length];
+        о.жить = 0.7;
+        о.sp.material.color.setHex(кр.след);
+        о.sp.position.set(x + (Math.random() - 0.5) * 0.3, y + 0.25 + Math.random() * 0.5, z - 0.3);
+        о.sp.visible = true;
+      }
+    }
+    for (const о of в.след) {
+      if (!о.sp.visible) continue;
+      о.жить -= step || 1 / 60;
+      if (о.жить <= 0) { о.sp.visible = false; continue; }
+      const t = о.жить / 0.7;
+      о.sp.position.y += (step || 1 / 60) * 0.5;
+      о.sp.scale.setScalar(0.35 * (0.4 + t));
+      о.sp.material.opacity = t * 0.85;
+    }
+
+    /* Свечение: ореол за спиной дышит, под ногами — пятно цвета. */
+    const свет = кр.свечение && !укус;
+    в.ореол.visible = в.пол.visible = !!свет;
+    if (свет) {
+      в.ореол.material.color.setHex(кр.свечение);
+      в.ореол.position.set(x, y + 1.0, z - 0.35);
+      в.ореол.material.opacity = 0.45 + 0.12 * Math.sin(time * 2.4);
+      в.пол.material.color.setHex(кр.свечение);
+      в.пол.position.set(x, 0.03, z);
+      в.пол.material.opacity = 0.5;
+    }
+
+    /* Крылья — в цвет, что выбран в лавке (умножается на картинку). */
+    const цвет = кр.крылья || 0xffffff;
+    for (const { group } of this.wingPair || []) group.children[0].material.color.setHex(цвет);
+  }
+
   drawWings(world, time) {
     const on = world.powers.wings > 0;
     this.wings.visible = on;
@@ -4637,7 +4921,9 @@ export class Renderer {
     this.подстроитьЧёткость(step || 1 / 60);
     this.drawMist(world, time);
     this.drawRunner(world, time, step);
+    this.подставкаБегуна(world, time);
     this.drawWings(world, time);
+    this.drawВещи(world, time, step);
     this.drawHunter(world, step);
     this.drawObstacles(world, time, step);
     this.drawPickups(world, time);

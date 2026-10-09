@@ -60,6 +60,16 @@ import { Renderer } from './render3d.js';
     placesTotal: el('places-total'),
     placesList: el('places-list'),
 
+    rewards: el('screen-rewards'),
+    rewardsList: el('rewards-list'),
+    rewardsCoins: el('rewards-coins'),
+    rewardsGems: el('rewards-gems'),
+    rewardsBadge: el('rewards-badge'),
+    shopItems: el('shop-items'),
+    shopLooks: el('shop-looks'),
+    hudItems: el('hud-items'),
+    doubleButton: el('double-button'),
+
     overTitle: el('over-title'),
     overText: el('over-text'),
     overDistance: el('over-distance'),
@@ -106,7 +116,12 @@ import { Renderer } from './render3d.js';
       charm: false, sound: true, music: true, тема: 1, runs: 0,
       /* Местности (23.09.2026): `всего` — метры за все забеги вместе, по ним
          открываются новые трассы; `места` — купленные; `место` — выбранная. */
-      всего: 0, место: 'кладбище', места: []
+      всего: 0, место: 'кладбище', места: [],
+      /* Вещи в духе Subway Surfers (09.10.2026): расходники штуками, покупки
+         навсегда, сундуки, косметика, дар дня, задания, ролик раз в час. */
+      вещи: { крышка: 0, фора: 0 }, куплено: [], сундуков: 0,
+      красота: {}, красотаКуплено: [],
+      дарДень: null, дарПодряд: 0, задания: null, роликМеню: 0
     };
     let запись = base;
     try {
@@ -116,7 +131,11 @@ import { Renderer } from './render3d.js';
         запись = Object.assign(base, data, {
           levels: Object.assign(base.levels, data.levels || {}),
           owned: Array.isArray(data.owned) && data.owned.length ? data.owned : base.owned,
-          места: Array.isArray(data.места) ? data.места : base.места
+          места: Array.isArray(data.места) ? data.места : base.места,
+          вещи: Object.assign(base.вещи, data.вещи || {}),
+          куплено: Array.isArray(data.куплено) ? data.куплено : base.куплено,
+          красота: Object.assign({}, data.красота || {}),
+          красотаКуплено: Array.isArray(data.красотаКуплено) ? data.красотаКуплено : base.красотаКуплено
         });
       }
     } catch (e) {
@@ -132,6 +151,10 @@ import { Renderer } from './render3d.js';
     for (const up of Shop.UPGRADES) запись.levels[up.id] = up.max;
     запись.charm = true;
     запись.места = Places.МЕСТА.filter(м => м.цена).map(м => м.id);   // и «скоро» — посмотреть
+    запись.вещи = { крышка: Math.max(запись.вещи.крышка || 0, 99), фора: Math.max(запись.вещи.фора || 0, 99) };
+    запись.куплено = Shop.ВЕЩИ.filter(в => в.вид === 'навсегда').map(в => в.id);
+    запись.красотаКуплено = Object.entries(Shop.КРАСОТА).flatMap(([ряд, список]) => список.map(к => ряд + ':' + к.id));
+    запись.сундуков = Math.max(запись.сундуков || 0, 9);
     запись.coins = Math.max(запись.coins || 0, 999999);
     запись.gems = Math.max(запись.gems || 0, 99999);
     return запись;
@@ -155,7 +178,7 @@ import { Renderer } from './render3d.js';
       caughtWorld = null;
       document.body.classList.remove('bitten');
     }
-    for (const key of ['menu', 'shop', 'places', 'help', 'pause', 'over']) {
+    for (const key of ['menu', 'shop', 'places', 'help', 'pause', 'over', 'rewards']) {
       dom[key].hidden = key !== which;
     }
     dom.hud.hidden = which !== null;
@@ -166,6 +189,272 @@ import { Renderer } from './render3d.js';
     dom.bestDistance.textContent = save.best;
     dom.menuCoins.textContent = save.coins;
     dom.menuGems.textContent = save.gems;
+    обновитьЗнак();
+  }
+
+  /* ---------- Вещи, награды, задания (09.10.2026) ---------- */
+
+  const есть = id => (save.куплено || []).includes(id);
+
+  /* Цвета косметики — в мир, его читает отрисовка. */
+  function красотаМира() {
+    const цвет = ряд => Shop.красота(save, ряд).цвет || null;
+    return { след: цвет('след'), крылья: цвет('крылья'), свечение: цвет('свечение') };
+  }
+
+  /* Задания дня: новый день — новые три задания и пустой счёт. */
+  function заданияСегодня() {
+    const день = Shop.номерДня();
+    if (!save.задания || save.задания.день !== день) {
+      save.задания = { день, счёт: {}, сделано: [false, false, false], сундук: false };
+      store();
+    }
+    return { день, список: Shop.заданияДня(день), з: save.задания };
+  }
+
+  /* Прибавить к счёту задания. «за забег» — лучший забег за день, «за день» — сумма. */
+  function засчитать(id, n, заЗабег) {
+    const { список, з } = заданияСегодня();
+    if (заЗабег) з.счёт[id] = Math.max(з.счёт[id] || 0, n);
+    else з.счёт[id] = (з.счёт[id] || 0) + n;
+    список.forEach((зад, i) => {
+      if (з.сделано[i] || зад.id !== id || (з.счёт[id] || 0) < зад.нужно) return;
+      з.сделано[i] = true;
+      save.coins += зад.награда.coins;
+      save.gems += зад.награда.gems;
+      toast(`Задание выполнено: +${число(зад.награда.coins)} монет, +${зад.награда.gems} кр.`, 2600);
+      sound.gem();
+    });
+    if (!з.сундук && з.сделано.every(Boolean)) {
+      з.сундук = true;
+      save.сундуков = (save.сундуков || 0) + 1;
+      toast('Все три задания — сундук из склепа твой!', 3000);
+    }
+  }
+
+  /* Красная точка на «Наградах»: дар не забран, сундук не открыт, ролик готов. */
+  function обновитьЗнак() {
+    if (!dom.rewardsBadge) return;
+    const дар = Shop.дарДня(save, Shop.номерДня());
+    const ролик = Date.now() - (save.роликМеню || 0) >= ЧАС;
+    dom.rewardsBadge.hidden = !(дар || (save.сундуков || 0) > 0 || ролик);
+  }
+
+  const ЧАС = 3600 * 1000;
+  const РОЛИК_МЕНЮ = 200;
+
+  function открытьСундук() {
+    if ((save.сундуков || 0) <= 0) return;
+    save.сундуков--;
+    const приз = Shop.открытьСундук(Math.random);
+    Shop.выдать(save, приз);
+    store();
+    if (приз.клад) sound.fanfare(); else sound.buy();
+    toast(`${приз.клад ? 'Клад! ' : 'В сундуке: '}${Shop.подписьПриза(приз)}`, 3000);
+  }
+
+  function карточка(иконка, имя, о, класс) {
+    const card = document.createElement('div');
+    card.className = 'card' + (класс ? ' ' + класс : '');
+    card.innerHTML = `${иконка}
+      <div class="card-body"><div class="card-name">${имя}</div><div class="card-about">${о}</div></div>
+      <div class="card-side"></div>`;
+    return card;
+  }
+
+  function кнопка(текст, по, выкл) {
+    const btn = document.createElement('button');
+    btn.className = 'pill';
+    btn.type = 'button';
+    btn.textContent = текст;
+    btn.disabled = !!выкл;
+    btn.addEventListener('click', по);
+    return btn;
+  }
+
+  /* Значки сняты с самих вещей игры (render3d.js значокВещи, ЗНАЧКИ=1). */
+  const значокВещи = id => `<img class="card-icon" src="${картинкаЛавки('лавка-вещь-' + id)}" alt="">`;
+
+  function renderRewards() {
+    dom.rewardsCoins.textContent = число(save.coins);
+    dom.rewardsGems.textContent = число(save.gems);
+    const список = dom.rewardsList;
+    список.innerHTML = '';
+
+    /* Дар дня. */
+    const день = Shop.номерДня();
+    const дар = Shop.дарДня(save, день);
+    const подряд = дар ? дар.подряд : save.дарПодряд || 1;
+    const приз = дар ? дар.приз : Shop.ДАРЫ[(save.дарПодряд || 1) % Shop.ДАРЫ.length];
+    const кДар = карточка('<div class="swatch" style="background:radial-gradient(circle,#fbbf24,#7c2d12)"></div>',
+      `Дар дня — ${подряд}-й день подряд`,
+      дар ? `Сегодня: ${Shop.подписьПриза(приз)}. Седьмой день — сундук.` : `Забран. Завтра: ${Shop.подписьПриза(приз)}.`,
+      дар ? '' : 'card-owned');
+    кДар.querySelector('.card-side').appendChild(дар
+      ? кнопка('Забрать', () => {
+        Shop.выдать(save, дар.приз);
+        save.дарДень = день;
+        save.дарПодряд = дар.подряд;
+        store(); sound.buy();
+        toast(`Дар дня: ${Shop.подписьПриза(дар.приз)}`, 2600);
+        renderRewards(); обновитьЗнак();
+      })
+      : Object.assign(document.createElement('span'), { className: 'pill pill-quiet', textContent: 'Завтра' }));
+    список.appendChild(кДар);
+
+    /* Задания. */
+    const заг = document.createElement('div');
+    заг.className = 'row-title';
+    заг.textContent = 'Задания на сегодня — за все три сундук';
+    список.appendChild(заг);
+    const { список: задания, з } = заданияСегодня();
+    задания.forEach((зад, i) => {
+      const n = Math.min(зад.нужно, з.счёт[зад.id] || 0);
+      const к = карточка('<div class="swatch" style="background:linear-gradient(135deg,#8b5cf6,#22d3ee)"></div>',
+        зад.текст,
+        `${число(n)} из ${число(зад.нужно)} · награда ${число(зад.награда.coins)} монет и ${зад.награда.gems} кр.` +
+        `<div class="progress"><i style="width:${Math.round(n / зад.нужно * 100)}%"></i></div>`,
+        з.сделано[i] ? 'card-owned' : '');
+      к.querySelector('.card-side').appendChild(Object.assign(document.createElement('span'),
+        { className: 'pill pill-quiet', textContent: з.сделано[i] ? 'Готово' : 'В деле' }));
+      список.appendChild(к);
+    });
+
+    /* Ролик раз в час. */
+    const осталось = ЧАС - (Date.now() - (save.роликМеню || 0));
+    const кРолик = карточка('<div class="swatch" style="background:radial-gradient(circle,#f43f5e,#3b0712)"></div>',
+      `Ролик — ${РОЛИК_МЕНЮ} монет`,
+      осталось > 0 ? `Следующий через ${Math.ceil(осталось / 60000)} мин.` : 'Раз в час: посмотри ролик и забери монеты.');
+    кРолик.querySelector('.card-side').appendChild(кнопка('Смотреть', async () => {
+      if (Date.now() - (save.роликМеню || 0) < ЧАС) return;
+      const ok = window.RunnerAds && await window.RunnerAds.show(1, 1);
+      if (!ok) { toast('Ролик не досмотрен'); return; }
+      save.роликМеню = Date.now();
+      save.coins += РОЛИК_МЕНЮ;
+      store(); sound.buy();
+      toast(`+${РОЛИК_МЕНЮ} монет`);
+      renderRewards(); обновитьЗнак();
+    }, осталось > 0));
+    список.appendChild(кРолик);
+
+    /* Сундуки. */
+    const n = save.сундуков || 0;
+    const кСундук = карточка(значокВещи('сундук'), 'Сундуки из склепа',
+      n ? `У тебя ${n} ${Shop.plural(n, 'сундук', 'сундука', 'сундуков')}.` : 'Сундуки дают задания, дар седьмого дня и лавка.');
+    кСундук.querySelector('.card-side').appendChild(кнопка('Открыть', () => {
+      открытьСундук(); renderRewards(); обновитьЗнак();
+    }, !n));
+    список.appendChild(кСундук);
+  }
+
+  /* Кнопки вещей на бегу: перерисовываются, только когда набор сменился. */
+  let фораЗабега = false;
+  function обновитьКнопкиВещей() {
+    if (!world) return;
+    const крышек = save.вещи.крышка || 0, фор = save.вещи.фора || 0;
+    const можноКрышку = крышек > 0 && world.powers.крышка <= 0 && !world.over;
+    const можноФору = фор > 0 && !фораЗабега && world.z < 120 && !world.over;
+    const ключ = `${можноКрышку ? крышек : 0}|${можноФору ? фор : 0}`;
+    if (dom.hudItems.dataset.key === ключ) return;
+    dom.hudItems.dataset.key = ключ;
+    dom.hudItems.innerHTML = '';
+    if (можноФору) {
+      const b = Object.assign(document.createElement('button'), { className: 'item-button item-button-фора', type: 'button' });
+      b.innerHTML = `<img src="${картинкаЛавки('лавка-вещь-фора')}" alt="">Фора ×${фор}`;
+      b.addEventListener('click', () => {
+        if (фораЗабега || !world.включить('фора')) return;
+        фораЗабега = true;
+        save.вещи.фора--; store();
+        toast('На катафалке!');
+      });
+      dom.hudItems.appendChild(b);
+    }
+    if (можноКрышку) {
+      const b = Object.assign(document.createElement('button'), { className: 'item-button', type: 'button' });
+      b.innerHTML = `<img src="${картинкаЛавки('лавка-вещь-крышка')}" alt="">Крышка ×${крышек}`;
+      b.addEventListener('click', () => {
+        if (!world.включить('крышка')) return;
+        save.вещи.крышка--; store();
+        засчитать('бонусы', 0);
+      });
+      dom.hudItems.appendChild(b);
+    }
+  }
+
+  /* Лавка: вещи. */
+  function renderItems() {
+    dom.shopItems.innerHTML = '';
+    for (const в of Shop.ВЕЩИ) {
+      const навсегда = в.вид === 'навсегда';
+      const куплено = навсегда && есть(в.id);
+      const штук = в.вид === 'расход' ? (save.вещи[в.id] || 0) : в.id === 'сундук' ? (save.сундуков || 0) : 0;
+      const к = карточка(значокВещи(в.id), в.name,
+        в.about + (в.вид !== 'навсегда' ? `<div class="card-count">У тебя: ${штук}</div>` : ''),
+        куплено ? 'card-owned' : '');
+      const side = к.querySelector('.card-side');
+      if (куплено) {
+        side.innerHTML = '<span class="pill pill-quiet">Куплено</span>';
+      } else {
+        side.appendChild(ценник(в.cost));
+        side.appendChild(кнопка('Купить', () => {
+          const now = Shop.canAfford(save, в.cost);
+          if (!now.ok) { sound.deny(); toast(now.reason); return; }
+          Shop.pay(save, в.cost);
+          if (навсегда) save.куплено.push(в.id);
+          else if (в.id === 'сундук') { save.сундуков = (save.сундуков || 0) + 1; }
+          else save.вещи[в.id] = (save.вещи[в.id] || 0) + 1;
+          store(); sound.buy();
+          if (в.id === 'сундук') открытьСундук();
+          else toast(навсегда ? `${в.name} — твоё навсегда` : `${в.name}: теперь ${save.вещи[в.id]}`);
+          renderShop();
+        }, !Shop.canAfford(save, в.cost).ok));
+        if (в.рубли) {
+          const р = кнопка(`${число(в.рубли)} ₽`, () => { sound.deny(); toast('Купить за рубли можно будет в приложении'); });
+          р.className = 'pill pill-quiet';
+          side.appendChild(р);
+        }
+      }
+      dom.shopItems.appendChild(к);
+    }
+  }
+
+  /* Лавка: красота — след, крылья, свечение. */
+  function renderLooks() {
+    dom.shopLooks.innerHTML = '';
+    const ряды = { след: 'След за бегуном', крылья: 'Крылья', свечение: 'Свечение' };
+    for (const [ряд, заголовок] of Object.entries(ряды)) {
+      const заг = document.createElement('div');
+      заг.className = 'row-title';
+      заг.textContent = заголовок;
+      dom.shopLooks.appendChild(заг);
+      const надето = Shop.красота(save, ряд).id;
+      for (const к of Shop.КРАСОТА[ряд]) {
+        const ключ = ряд + ':' + к.id;
+        const своё = !к.cost.coins || (save.красотаКуплено || []).includes(ключ);
+        const hex = к.цвет ? '#' + к.цвет.toString(16).padStart(6, '0') : null;
+        const кар = карточка(`<div class="swatch" style="${hex ? `background:radial-gradient(circle,${hex},#0b0d14 72%);box-shadow:0 0 16px ${hex}55` : ''}"></div>`,
+          к.name, hex ? 'Цвет виден на бегу.' : 'Как было.', надето === к.id ? 'card-active' : своё ? 'card-owned' : '');
+        const side = кар.querySelector('.card-side');
+        if (надето === к.id) side.innerHTML = '<span class="pill pill-quiet">Надето</span>';
+        else if (своё) side.appendChild(кнопка('Надеть', () => {
+          save.красота[ряд] = к.id; store(); sound.buy(); renderLooks();
+        }));
+        else {
+          side.appendChild(ценник(к.cost));
+          side.appendChild(кнопка('Купить', () => {
+            const now = Shop.canAfford(save, к.cost);
+            if (!now.ok) { sound.deny(); toast(now.reason); return; }
+            Shop.pay(save, к.cost);
+            save.красотаКуплено.push(ключ);
+            save.красота[ряд] = к.id;
+            store(); sound.buy();
+            toast(`${к.name} — надето`);
+            renderShop();
+          }, !Shop.canAfford(save, к.cost).ok));
+        }
+        dom.shopLooks.appendChild(кар);
+      }
+    }
   }
 
   /* ---------- Забег ---------- */
@@ -175,9 +464,16 @@ import { Renderer } from './render3d.js';
       seed: (Math.random() * 1e9) | 0,
       levels: save.levels,
       startShield: save.charm,
-      место: Places.текущее(save, ТЕСТ).id     // по какой трассе бежим: от неё и нечисть
+      место: Places.текущее(save, ТЕСТ).id,    // по какой трассе бежим: от неё и нечисть
+      удвоитель: есть('удвоитель'),
+      мышь: есть('мышь')
     });
     world.skin = Shop.skinById(save.skin);
+    world.красота = красотаМира();
+    world.мышьРядом = есть('мышь');
+    фораЗабега = false;
+    удвоеноЗаРолик = false;
+    dom.hudItems.dataset.key = '';
     continues = 0;
     paid = { reward: 0, gems: 0, distance: 0 };
     running = true;
@@ -204,19 +500,21 @@ import { Renderer } from './render3d.js';
     handleEvents(events);
     renderer.draw(world, now / 1000, dt);
     updateHud();
+    обновитьКнопкиВещей();
   }
 
   function handleEvents(events) {
     for (const e of events) {
       switch (e.type) {
-        case 'jump': sound.jump(); break;
+        case 'jump': sound.jump(); засчитать('прыжки', 1); break;
         case 'land': sound.land(); break;
-        case 'slide': sound.slide(); break;
+        case 'slide': sound.slide(); засчитать('подкаты', 1); break;
         case 'coin': sound.coin(); break;
-        case 'gem': sound.gem(); break;
-        case 'power': sound.power(); break;
+        case 'gem': sound.gem(); засчитать('кристаллы', 1); break;
+        case 'power': sound.power(); if (e.kind !== 'крышка' && e.kind !== 'фора') засчитать('бонусы', 1); break;
+        case 'board-break': sound.shieldBreak(); renderer.tremble(0.4); toast('Крышка гроба приняла удар'); break;
         case 'power-out': sound.powerOut(); break;
-        case 'smash': sound.smash(); renderer.tremble(0.3); break;
+        case 'smash': sound.smash(); renderer.tremble(0.3); if (e.kind === 'zombie') засчитать('снести', 1); break;
         case 'shield-break': sound.shieldBreak(); renderer.tremble(0.4); break;
         case 'hit':
           e.kind === 'pit' ? sound.splash() : sound.hit();
@@ -260,7 +558,7 @@ import { Renderer } from './render3d.js';
 
     /* Значки действующих находок. Перерисовываем только когда набор сменился —
        иначе браузер каждый кадр пересобирает разметку. */
-    const names = { magnet: 'Магнит', shield: 'Щит', dash: 'Рывок', wings: 'Крылья' };
+    const names = { magnet: 'Магнит', shield: 'Щит', dash: 'Рывок', wings: 'Крылья', крышка: 'Крышка', фора: 'Катафалк' };
     const active = Object.keys(world.powers).filter(k => world.powers[k] > 0);
     const key = active.join(',');
     if (key !== dom.powers.dataset.key) {
@@ -295,6 +593,11 @@ import { Renderer } from './render3d.js';
     const best = e.distance > save.best;
     if (best) save.best = e.distance;
 
+    /* Задания: метры и монеты — за этот забег, забеги — за день. */
+    засчитать('метры', e.distance, true);
+    засчитать('монеты', world.coins, true);
+    if (!continues) засчитать('забеги', 1);
+
     /* Метры идут в общий счёт — он показан на экране трасс. Трассы по нему
        больше не открываются (29.09.2026), только покупаются. Считаем только
        то, что не зачли при прошлом продолжении этого же забега. */
@@ -322,8 +625,28 @@ import { Renderer } from './render3d.js';
         : `Продолжить за ${count} ${Shop.plural(count, 'ролик', 'ролика', 'роликов')}`;
     }
 
+    /* Удвоить монеты забега за ролик — раз за забег, если есть что удваивать. */
+    dom.doubleButton.hidden = удвоеноЗаРолик || world.reward <= 0 || !(window.RunnerAds && window.RunnerAds.available());
+    dom.doubleButton.textContent = `Удвоить монеты за ролик (+${число(world.reward)})`;
+    dom.hudItems.innerHTML = '';
+    dom.hudItems.dataset.key = '';
+
     if (best) sound.fanfare(); else sound.caught();
     showScreen('over');
+  }
+
+  let удвоеноЗаРолик = false;
+  async function удвоитьЗаРолик() {
+    if (!world || удвоеноЗаРолик) return;
+    dom.doubleButton.disabled = true;
+    const ok = await window.RunnerAds.show(1, 1);
+    dom.doubleButton.disabled = false;
+    if (!ok) { toast('Ролик не досмотрен'); return; }
+    удвоеноЗаРолик = true;
+    save.coins += world.reward;
+    store(); sound.buy();
+    toast(`+${число(world.reward)} монет`);
+    dom.doubleButton.hidden = true;
   }
 
   /* Продолжение: ролики, потом бегун поднимается там же, где его догнали. */
@@ -446,6 +769,8 @@ import { Renderer } from './render3d.js';
     dom.shopGems.textContent = save.gems;
     renderSkins();
     renderUpgrades();
+    renderItems();
+    renderLooks();
   }
 
   function renderSkins() {
@@ -687,6 +1012,9 @@ import { Renderer } from './render3d.js';
 
   el('play-button').addEventListener('click', startRun);
   el('continue-button').addEventListener('click', continueRun);
+  el('double-button').addEventListener('click', удвоитьЗаРолик);
+  el('rewards-button').addEventListener('click', () => { renderRewards(); showScreen('rewards'); });
+  el('rewards-back').addEventListener('click', () => showScreen('menu'));
   el('again-button').addEventListener('click', startRun);
   el('menu-button').addEventListener('click', () => showScreen('menu'));
   el('help-button').addEventListener('click', () => showScreen('help'));
@@ -715,9 +1043,11 @@ import { Renderer } from './render3d.js';
     tab.addEventListener('click', () => {
       for (const other of document.querySelectorAll('.tab')) other.classList.remove('tab-active');
       tab.classList.add('tab-active');
-      const skins = tab.dataset.tab === 'skins';
-      dom.shopSkins.hidden = !skins;
-      dom.shopUpgrades.hidden = skins;
+      const вкладка = tab.dataset.tab;
+      dom.shopSkins.hidden = вкладка !== 'skins';
+      dom.shopUpgrades.hidden = вкладка !== 'upgrades';
+      dom.shopItems.hidden = вкладка !== 'items';
+      dom.shopLooks.hidden = вкладка !== 'looks';
     });
   }
 
@@ -790,6 +1120,8 @@ import { Renderer } from './render3d.js';
   function newIdleWorld() {
     idleWorld = new Engine.World({ seed: (Math.random() * 1e9) | 0, место: Places.текущее(save, ТЕСТ).id });
     idleWorld.skin = Shop.skinById(save.skin);
+    idleWorld.красота = красотаМира();
+    idleWorld.мышьРядом = есть('мышь');
     idleLast = performance.now();
   }
 

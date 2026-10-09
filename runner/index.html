@@ -61,6 +61,9 @@
   </div>
 
   <div class="powers" id="powers"></div>
+  <!-- Вещи из лавки на бегу (09.10.2026): крышка гроба — в любой миг,
+       фора на катафалке — только в начале забега. -->
+  <div class="items" id="hud-items"></div>
 </div>
 
 <!-- ---------- Главный экран ---------- -->
@@ -85,6 +88,7 @@
     </div>
 
     <button class="button button-main" id="play-button" type="button">Бежать</button>
+    <button class="button button-rewards" id="rewards-button" type="button">Награды<span class="badge" id="rewards-badge" hidden></span></button>
     <div class="button-row">
       <button class="button" id="shop-button" type="button">Лавка</button>
       <button class="button" id="places-button" type="button">Трассы</button>
@@ -114,10 +118,13 @@
     <div class="tabs">
       <button class="tab tab-active" data-tab="skins" type="button">Обличья</button>
       <button class="tab" data-tab="upgrades" type="button">Снаряжение</button>
+      <button class="tab" data-tab="items" type="button">Вещи</button>
+      <button class="tab" data-tab="looks" type="button">Красота</button>
     </div>
-
     <div class="shop-list" id="shop-skins"></div>
     <div class="shop-list" id="shop-upgrades" hidden></div>
+    <div class="shop-list" id="shop-items" hidden></div>
+    <div class="shop-list" id="shop-looks" hidden></div>
 
     <button class="button" id="shop-back" type="button">Назад</button>
   </div>
@@ -146,6 +153,22 @@
   </div>
 </section>
 
+<!-- ---------- Награды (09.10.2026) ----------
+     Дар дня, три задания на день, ролик раз в час, сундуки из склепа. -->
+<section class="screen" id="screen-rewards" hidden>
+  <div class="panel panel-wide">
+    <div class="panel-head">
+      <h2>Награды</h2>
+      <div class="purse purse-big">
+        <i class="dot dot-coin"></i><span id="rewards-coins">0</span>
+        <i class="dot dot-gem"></i><span id="rewards-gems">0</span>
+      </div>
+    </div>
+    <div class="shop-list" id="rewards-list"></div>
+    <button class="button" id="rewards-back" type="button">Назад</button>
+  </div>
+</section>
+
 <!-- ---------- Как играть ---------- -->
 <section class="screen" id="screen-help" hidden>
   <div class="panel panel-wide">
@@ -163,6 +186,13 @@
       <div class="help-item"><b>Щит</b><span>Один удар проходит бесследно.</span></div>
       <div class="help-item"><b>Молния</b><span>Рывок: быстрее, неуязвим, сносит мертвецов.</span></div>
       <div class="help-item"><b>Крыло</b><span>Полёт над трассой. Прыжок обрывает его в любой миг.</span></div>
+    </div>
+    <h3>Вещи из лавки</h3>
+    <div class="help-grid">
+      <div class="help-item"><b>Крышка гроба</b><span>Кнопка внизу экрана на бегу: полминуты на крышке, один удар она примет на себя.</span></div>
+      <div class="help-item"><b>Фора на катафалке</b><span>Кнопка в первые секунды забега: катафалк уносит вперёд и сносит всё на пути.</span></div>
+      <div class="help-item"><b>Летучая мышь</b><span>Подбирает монеты с соседних дорожек.</span></div>
+      <div class="help-item"><b>Награды</b><span>Дар каждый день, три задания на день, ролик раз в час, сундуки из склепа.</span></div>
     </div>
 
     <p class="note">Столкновение не убивает сразу: тварь за спиной подбирается ближе. Три ошибки подряд — и она догонит. Чистый бег снова отрывает от неё.</p>
@@ -209,6 +239,7 @@
     <button class="button button-main" id="continue-button" type="button" hidden>
       <span id="continue-label">Продолжить за ролик</span>
     </button>
+    <button class="button" id="double-button" type="button" hidden>Удвоить монеты за ролик</button>
     <button class="button button-main" id="again-button" type="button">Ещё раз</button>
     <button class="button" id="menu-button" type="button">В меню</button>
   </div>

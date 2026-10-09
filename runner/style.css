@@ -692,3 +692,78 @@ h3 { margin: 8px 0 0; font-size: 15px; color: var(--muted); font-weight: 600; }
   border-top: 1px solid var(--border);
   padding-top: 10px;
 }
+
+/* ---------- Вещи из лавки, награды (09.10.2026) ---------- */
+
+.power-крышка i { background: #d6b27a; box-shadow: 0 0 10px #d6b27a; }
+.power-фора i   { background: #ff8a3a; box-shadow: 0 0 10px #ff8a3a; }
+
+/* Кнопки вещей на бегу — внизу слева, под большой палец. */
+.items {
+  position: fixed;
+  left: clamp(12px, 4vw, 28px);
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.item-button {
+  pointer-events: auto;
+  appearance: none;
+  border: 1px solid var(--border);
+  background: rgba(12, 14, 22, 0.78);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 12px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.item-button img { width: 26px; height: 26px; object-fit: contain; }
+.item-button-фора { border-color: rgba(255, 138, 58, 0.6); box-shadow: 0 0 18px rgba(255, 138, 58, 0.25); }
+
+.button-rewards { position: relative; }
+
+.badge {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 10px var(--danger);
+}
+
+.card-count { font-size: 12px; color: var(--muted); }
+
+.swatch {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.row-title { margin: 6px 2px 0; font-size: 13px; color: var(--muted); font-weight: 700; }
+
+.progress {
+  margin-top: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.progress i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+
+.tabs { flex-wrap: wrap; }
+.tab { min-width: calc(50% - 4px); }
+@media (min-width: 520px) { .tab { min-width: 0; } }

@@ -97,6 +97,21 @@
      к тому же надгробию и погибнет второй раз, не успев ничего нажать. */
   const REVIVE_CLEAR = 26;
   const REVIVE_GRACE = 2.5;
+
+  /* ---------- Вещи из лавки в духе Subway Surfers (09.10.2026) ----------
+
+     Владелец: «ставим покупки в духе Subway Surfers». Крышка гроба — как доска:
+     включается кнопкой на бегу, держится полминуты и принимает на себя один
+     удар. Фора на катафалке — как «Head Start»: в первые секунды забега
+     уносит вперёд втрое быстрее, неуязвимо, с магнитом; сносит всё на пути.
+     После форы участок впереди расчищен, как после продолжения. */
+  const КРЫШКА_ВРЕМЯ = 30;
+  const ФОРА_ВРЕМЯ = 9;
+  const ФОРА_СКОРОСТЬ = 3.0;            // во столько раз быстрее обычного бега
+  /* Летучая мышь-спутник подбирает монеты с соседней дорожки: до центра
+     соседней 1,75 м — берёт всё, что ближе 2,4 м по ширине, но только монеты
+     у земли, не кристаллы и не находки (за ними — самому). */
+  const МЫШЬ_ДОСТАЁТ = 2.4;
   /* Магнит тянет монеты издалека и через дорожки: владелец сказал, что
      видно только сбор, а самого притяжения нет (20.09.2026). Дальность
      выросла, а полёт монет к бегуну рисует render3d (drawPickups). */
@@ -550,6 +565,8 @@
       this.seed = opts.seed || 1;
       this.levels = Object.assign({ magnet: 0, shield: 0, dash: 0, wings: 0 }, opts.levels);
       this.startShield = !!opts.startShield;
+      this.удвоитель = !!opts.удвоитель;   // монеты ×2 навсегда (лавка)
+      this.мышь = !!opts.мышь;             // спутник подбирает монеты с соседних дорожек
       this.место = opts.место || 'кладбище';   // по какой трассе бежим: от неё зависит нечисть
       this.reset();
     }
@@ -580,7 +597,7 @@
       this.coins = 0;
       this.gems = 0;
       this.hits = 0;
-      this.powers = { magnet: 0, shield: 0, dash: 0, wings: 0 };
+      this.powers = { magnet: 0, shield: 0, dash: 0, wings: 0, крышка: 0, фора: 0 };
       this.events = [];
       this.buffer = { lane: 0, jump: 0, slide: 0 };
       if (this.startShield) this.powers.shield = this.powerTime('shield');
@@ -661,7 +678,23 @@
     }
 
     get invulnerable() {
-      return this.powers.dash > 0 || this.powers.wings > 0;
+      return this.powers.dash > 0 || this.powers.wings > 0 || this.powers.фора > 0;
+    }
+
+    /* Вещь из лавки пущена в ход (кнопка на бегу). Сколько их у игрока —
+       считает приложение; движок только включает действие. */
+    включить(вещь) {
+      if (this.over || this.doomed) return false;
+      if (вещь === 'крышка') {
+        if (this.powers.крышка > 0) return false;
+        this.powers.крышка = КРЫШКА_ВРЕМЯ;
+      } else if (вещь === 'фора') {
+        if (this.powers.фора > 0) return false;
+        this.powers.фора = ФОРА_ВРЕМЯ;
+        this.powers.magnet = Math.max(this.powers.magnet, ФОРА_ВРЕМЯ);
+      } else return false;
+      this.events.push({ type: 'power', kind: вещь });
+      return true;
     }
 
     /* Ввод копится в буфер: нажатие, сделанное чуть раньше нужного мгновения,
@@ -712,6 +745,7 @@
         this.powers[kind] = Math.max(0, this.powers[kind] - dt);
         if (this.powers[kind] === 0) {
           if (kind === 'wings') this.grace = WINGS_GRACE;
+          if (kind === 'фора') this.расчистить();
           this.events.push({ type: 'power-out', kind });
         }
       }
@@ -739,7 +773,7 @@
       /* Рывок не включается и не гаснет мгновенно. Резкий скачок скорости
          обрывал прыжок на полпути: бегун отталкивался по одному расчёту,
          а летел уже по другому. */
-      const wanted = this.powers.dash > 0 ? DASH_SPEED : 1;
+      const wanted = this.powers.фора > 0 ? ФОРА_СКОРОСТЬ : this.powers.dash > 0 ? DASH_SPEED : 1;
       this.boost += (wanted - this.boost) * Math.min(1, dt / DASH_RAMP);
       if (this.buffer.jump > 0) this.buffer.jump -= dt;
       if (this.buffer.slide > 0) this.buffer.slide -= dt;
@@ -939,11 +973,25 @@
          где очутился, и спрашивать с него рано. */
       if (this.grace > 0) return;
       if (this.invulnerable) {
+        /* Катафалк форы сносит всё, что не яма. */
+        if (this.powers.фора > 0 && !obstacle.pit) {
+          obstacle.offset = -1e6;
+          this.events.push({ type: 'smash', kind: obstacle.kind });
+          return;
+        }
         if (this.powers.dash > 0 && obstacle.kind === 'zombie') {
           /* Рывок сносит мертвецов, а не спотыкается о них. */
           obstacle.offset = -1e6;
           this.events.push({ type: 'smash', kind: obstacle.kind });
         }
+        return;
+      }
+      /* Крышка гроба принимает удар первой — щит остаётся про запас. */
+      if (this.powers.крышка > 0) {
+        this.powers.крышка = 0;
+        obstacle.offset = -1e6;
+        this.grace = Math.max(this.grace, 0.6);
+        this.events.push({ type: 'board-break' });
         return;
       }
       if (this.powers.shield > 0) {
@@ -996,12 +1044,14 @@
         if (p.z < this.z - 1.2 || p.z > this.z + 1.6) continue;
         const dx = Math.abs(this.x - p.lane * LANE_W);
         const dy = Math.abs((this.y + this.bodyHeight / 2) - p.y);
-        if (dx > reach || dy > reachY) continue;
+        /* Мышь берёт монеты у земли с соседней дорожки. */
+        const мышью = this.мышь && p.kind === 'coin' && !p.sky && dx > reach && dx <= МЫШЬ_ДОСТАЁТ && p.y < 1.4;
+        if (!мышью && (dx > reach || dy > reachY)) continue;
 
         p.taken = true;
         if (p.kind === 'coin') {
-          this.coins += COIN_VALUE;
-          this.events.push({ type: 'coin', total: this.coins });
+          this.coins += COIN_VALUE * (this.удвоитель ? 2 : 1);
+          this.events.push({ type: 'coin', total: this.coins, мышь: мышью, lane: p.lane, z: p.z });
         } else if (p.kind === 'gem') {
           this.gems++;
           this.events.push({ type: 'gem', total: this.gems });
@@ -1015,6 +1065,17 @@
           this.events.push({ type: 'power', kind: p.kind });
         }
       }
+    }
+
+    /* Участок впереди чист: после форы бегун опускается на обычный ход
+       посреди плотной трассы, и первая же связка в упор его бы сбила. */
+    расчистить() {
+      const from = this.z - 2, to = this.z + REVIVE_CLEAR;
+      this.track.obstacles = this.track.obstacles.filter(o => {
+        const z0 = o.z + o.offset;
+        return z0 + o.len < from || z0 > to;
+      });
+      this.grace = Math.max(this.grace, 1.0);
     }
 
     /* Поднять бегуна там же, где его догнали. */
@@ -1204,6 +1265,6 @@
     LANE_W, LANES, STEP, OBSTACLES, HUNTERS, REVIVE_CLEAR, REVIVE_GRACE, LIVES,
     BODY_W, BODY_H, SLIDE_H, PIT_DEPTH, PIT_KINDS, MONSTER_KINDS, ТВАРИ_МЕСТ, твариМеста,
     SPEED_START, SPEED_MAX, JUMP_V, GRAVITY, WINGS_Y,
-    POWER_BASE, POWER_PER_LEVEL
+    POWER_BASE, POWER_PER_LEVEL, КРЫШКА_ВРЕМЯ, ФОРА_ВРЕМЯ, ФОРА_СКОРОСТЬ, МЫШЬ_ДОСТАЁТ
   };
 });
