@@ -112,6 +112,12 @@
      соседней 1,75 м — берёт всё, что ближе 2,4 м по ширине, но только монеты
      у земли, не кристаллы и не находки (за ними — самому). */
   const МЫШЬ_ДОСТАЁТ = 2.4;
+
+  /* Плюсы нарядов (09.10.2026, владелец: «каждый наряд свой персонаж, и какие
+     ништяки даёт этот наряд»; плюсы утвердил 09.10). */
+  const КРОВЬ_ПУТЬ = 500;               // столько метров без ошибок — и одна прощается
+  const КОСТИ_ДОЛЯ = 0.25;              // костяному монет на четверть больше
+  const ТРАВЫ_ЩИТ = 1.5;                // чумному щит держится в полтора раза дольше
   /* Магнит тянет монеты издалека и через дорожки: владелец сказал, что
      видно только сбор, а самого притяжения нет (20.09.2026). Дальность
      выросла, а полёт монет к бегуну рисует render3d (drawPickups). */
@@ -567,6 +573,7 @@
       this.startShield = !!opts.startShield;
       this.удвоитель = !!opts.удвоитель;   // монеты ×2 навсегда (лавка)
       this.мышь = !!opts.мышь;             // спутник подбирает монеты с соседних дорожек
+      this.перк = opts.перк || null;       // плюс наряда: лопата, травы, призрак, охота, кровь, кости
       this.место = opts.место || 'кладбище';   // по какой трассе бежим: от неё зависит нечисть
       this.reset();
     }
@@ -599,6 +606,9 @@
       this.hits = 0;
       this.powers = { magnet: 0, shield: 0, dash: 0, wings: 0, крышка: 0, фора: 0 };
       this.events = [];
+      this.призракЦел = this.перк === 'призрак';   // раз за забег сквозь препятствие
+      this.чистыйС = 0;                            // откуда идёт путь без ошибок (кровопийца)
+      this.монетДоля = 0;                          // копилка четвертей монеты (костяной)
       this.buffer = { lane: 0, jump: 0, slide: 0 };
       if (this.startShield) this.powers.shield = this.powerTime('shield');
       this.track.buildTo(260);
@@ -639,7 +649,8 @@
     }
 
     powerTime(kind) {
-      return POWER_BASE[kind] + POWER_PER_LEVEL * (this.levels[kind] || 0);
+      const t = POWER_BASE[kind] + POWER_PER_LEVEL * (this.levels[kind] || 0);
+      return kind === 'shield' && this.перк === 'травы' ? t * ТРАВЫ_ЩИТ : t;
     }
 
     get groundSpeed() {
@@ -792,6 +803,13 @@
          полоса делится на три, и по ней всегда видно, сколько ошибок осталось.
          Пока бегун на земле, тварь подступает ближе положенного — и отходит
          обратно, когда он снова бежит. */
+      /* Кровопийца: 500 м без ошибок — Дракула отстаёт, одна ошибка прощается. */
+      if (this.перк === 'кровь' && this.hits > 0 && !this.doomed && this.fallen <= 0 &&
+          this.z - this.чистыйС >= КРОВЬ_ПУТЬ) {
+        this.hits--;
+        this.чистыйС = this.z;
+        this.events.push({ type: 'forgive', lives: this.lives });
+      }
       const base = Math.min(1, CHASE_BASE + (1 - CHASE_BASE) * (this.hits / LIVES));
       const target = this.doomed ? 1 : Math.min(0.97, base + (this.fallen > 0 ? CHASE_CLOSE : 0));
       this.chase += (target - this.chase) * Math.min(1, dt / CHASE_EASE);
@@ -954,6 +972,13 @@
         if (o.pit) {
           /* Яма: беда не в том, что во что-то врезался, а в том, что не летел. */
           if (this.y > PIT_DEPTH) continue;
+          /* Могильщик в яме как дома: спрыгнул и выбрался, только сбавил ход. */
+          if (this.перк === 'лопата' && !this.invulnerable && this.grace <= 0) {
+            this.stumble = STUMBLE_TIME;
+            this.grace = 0.5;
+            this.events.push({ type: 'pit-escape' });
+            continue;
+          }
         } else if (o.bottom) {
           /* Паутина: под ней проходишь подкатом. */
           if (top <= o.bottom) continue;
@@ -973,8 +998,8 @@
          где очутился, и спрашивать с него рано. */
       if (this.grace > 0) return;
       if (this.invulnerable) {
-        /* Катафалк форы сносит всё, что не яма. */
-        if (this.powers.фора > 0 && !obstacle.pit) {
+        /* Катафалк форы сносит всё, что не яма; у охотника — и рывок. */
+        if ((this.powers.фора > 0 || (this.powers.dash > 0 && this.перк === 'охота')) && !obstacle.pit) {
           obstacle.offset = -1e6;
           this.events.push({ type: 'smash', kind: obstacle.kind });
           return;
@@ -984,6 +1009,13 @@
           obstacle.offset = -1e6;
           this.events.push({ type: 'smash', kind: obstacle.kind });
         }
+        return;
+      }
+      /* Неупокоенный раз за забег проходит сквозь препятствие, как призрак. */
+      if (this.призракЦел) {
+        this.призракЦел = false;
+        this.grace = Math.max(this.grace, 0.5);
+        this.events.push({ type: 'ghost-pass' });
         return;
       }
       /* Крышка гроба принимает удар первой — щит остаётся про запас. */
@@ -1002,6 +1034,7 @@
       }
 
       this.hits++;
+      this.чистыйС = this.z;
       obstacle.offset = -1e6;             // убрать с пути, чтобы не бить дважды
 
       /* Удар сбивает с ног, где бы бегун ни был: прыжок обрывается, подкат
@@ -1050,7 +1083,12 @@
 
         p.taken = true;
         if (p.kind === 'coin') {
-          this.coins += COIN_VALUE * (this.удвоитель ? 2 : 1);
+          let монет = COIN_VALUE * (this.удвоитель ? 2 : 1);
+          if (this.перк === 'кости') {
+            this.монетДоля += монет * КОСТИ_ДОЛЯ;
+            while (this.монетДоля >= 1) { монет++; this.монетДоля--; }
+          }
+          this.coins += монет;
           this.events.push({ type: 'coin', total: this.coins, мышь: мышью, lane: p.lane, z: p.z });
         } else if (p.kind === 'gem') {
           this.gems++;

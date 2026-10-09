@@ -466,7 +466,8 @@ import { Renderer } from './render3d.js';
       startShield: save.charm,
       место: Places.текущее(save, ТЕСТ).id,    // по какой трассе бежим: от неё и нечисть
       удвоитель: есть('удвоитель'),
-      мышь: есть('мышь')
+      мышь: есть('мышь'),
+      перк: Shop.skinById(save.skin).перк
     });
     world.skin = Shop.skinById(save.skin);
     world.красота = красотаМира();
@@ -513,6 +514,10 @@ import { Renderer } from './render3d.js';
         case 'gem': sound.gem(); засчитать('кристаллы', 1); break;
         case 'power': sound.power(); if (e.kind !== 'крышка' && e.kind !== 'фора') засчитать('бонусы', 1); break;
         case 'board-break': sound.shieldBreak(); renderer.tremble(0.4); toast('Крышка гроба приняла удар'); break;
+        /* Плюсы нарядов — вслух, иначе их не заметить. */
+        case 'ghost-pass': sound.power(); toast('Прошёл сквозь, как призрак'); break;
+        case 'pit-escape': sound.land(); toast('Могильщик выбрался из ямы'); break;
+        case 'forgive': sound.gem(); toast('Дракула отстал — одна ошибка прощена'); break;
         case 'power-out': sound.powerOut(); break;
         case 'smash': sound.smash(); renderer.tremble(0.3); if (e.kind === 'zombie') засчитать('снести', 1); break;
         case 'shield-break': sound.shieldBreak(); renderer.tremble(0.4); break;
@@ -789,6 +794,7 @@ import { Renderer } from './render3d.js';
         <div class="card-body">
           <div class="card-name">${skin.name}</div>
           <div class="card-about">${skin.about}</div>
+          <div class="card-perk">${skin.плюс || ''}</div>
         </div>
         <div class="card-side"></div>`;
 
