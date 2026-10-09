@@ -14,14 +14,28 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
+  /* Звуки места по трассам: слои по кругу [запись, громкость] и редкие
+     голоса, пауза между ними — в секундах. Громкость относительно master
+     (0,5): все записи выровнены по громкости (−24 LUFS слои, −18 голоса). */
+  const ФОНЫ = {
+    кладбище: {
+      слои: [['фон-ветер', 0.45], ['фон-сверчки', 0.3]],
+      разово: [['разово-ворон', 0.35], ['разово-сова', 0.4]],
+      пауза: [9, 22]
+    },
+    подземелье: { слои: [['фон-гул', 0.55], ['фон-капель', 0.4]] },
+    замок: { слои: [['фон-камин', 0.35], ['фон-сквозняк', 0.4]] }
+  };
+
   class Sound {
     constructor() {
       this.enabled = true;
       this.ac = null;
       this.master = null;
       this.музыкаВкл = true;
-      this.тема = 1;
+      this.место = 'кладбище';
       this.источник = null;
+      this.фон = null;                    // играющие слои звуков места
     }
 
     /* Контекст поднимается по первому звуку и просыпается после сворачивания.
@@ -48,6 +62,10 @@
     setEnabled(on) {
       this.enabled = !!on;
       if (this.master) this.master.gain.value = on ? 0.5 : 0;
+      /* Фон — только когда контекст уже поднят касанием: при загрузке
+         страницы звук без жеста браузер не пускает и ругается в консоли. */
+      if (on && this.ac) this.фонИграть();
+      else if (!on) this.фонСтоп();
     }
 
     /* Свернули вкладку — игра замолкает целиком, вместе с музыкой. */
@@ -103,33 +121,42 @@
 
     /* Музыка трассы (владелец 30.09.2026: «чтобы ты бежал не в тишине, а
        музыка играла; кому надо — выключат»). Своя громкость и свой
-       выключатель — музыку и звуки выключают порознь. Тема играет по кругу,
-       входит и уходит плавно. Номер темы — models/звук/музыка-N.mp3. */
+       выключатель — музыку и звуки выключают порознь. Играет по кругу,
+       входит и уходит плавно.
+
+       С 09.10.2026 у каждой трассы своя музыка — models/звук/музыка-<место>.mp3
+       (владелец: «на кладбище музыку какую-нибудь томную… негромкую; для
+       подземелья тоже что-то в этом духе, и для замка»). Три прежние темы
+       Kevin MacLeod ему не понравились — убраны. Громкость ниже прежней
+       (0,32 → 0,2): поверх неё ещё звуки места. */
     setMusic(on) {
       this.музыкаВкл = !!on;
       if (on) this.играть();
       else this.заглушить();
     }
 
-    сменитьТему(тема) {
-      if (тема === this.тема) return;
-      this.тема = тема;
+    /* Трасса сменилась — и музыка, и звуки места свои. */
+    сменитьМесто(место) {
+      if (!место || место === this.место) return;
+      this.место = место;
       if (this.источник) this.заглушить();
-      if (this.музыкаВкл) this.играть();
+      this.фонСтоп();
+      this.играть();
     }
 
     /* Зовётся на каждом касании: браузер пускает звук только после жеста. */
     играть() {
+      this.фонИграть();
       if (!this.музыкаВкл || this.источник || this.грузится) return;
       const ac = this.контекст();
       if (!ac) return;
-      const тема = this.тема || 1;
-      const ждём = this.запись('музыка-' + тема);
+      const место = this.место;
+      const ждём = this.запись('музыка-' + место);
       if (!ждём) return;
       this.грузится = true;
       ждём.then(buf => {
         this.грузится = false;
-        if (!buf || !this.музыкаВкл || this.источник || тема !== (this.тема || 1)) return;
+        if (!buf || !this.музыкаВкл || this.источник || место !== this.место) return;
         if (!this.музыкаГромкость) {
           this.музыкаГромкость = ac.createGain();
           this.музыкаГромкость.connect(ac.destination);
@@ -137,7 +164,7 @@
         const g = this.музыкаГромкость.gain;
         g.cancelScheduledValues(ac.currentTime);
         g.setValueAtTime(0.0001, ac.currentTime);
-        g.exponentialRampToValueAtTime(0.32, ac.currentTime + 2);
+        g.exponentialRampToValueAtTime(0.2, ac.currentTime + 2);
         const src = ac.createBufferSource();
         src.buffer = buf;
         src.loop = true;
@@ -156,6 +183,95 @@
       g.setValueAtTime(Math.max(0.0001, g.value), t);
       g.exponentialRampToValueAtTime(0.0001, t + 0.6);
       src.stop(t + 0.65);
+    }
+
+    /* ---------- Звуки места (09.10.2026) ----------
+
+       Под выключателем «Звуки» (идут через master): слои по кругу, каждый
+       своим источником — короткие петли разной длины не сходятся швами, —
+       и редкие голоса в случайный миг то слева, то справа. Все записи —
+       CC0, откуда — models/ОТКУДА ВЗЯТО.txt. Края петли срезаны на 30 мс:
+       mp3 кладёт в начало и конец тишину кодировщика, и на шве был бы щелчок. */
+    фонИграть() {
+      if (this.фон || !this.enabled) return;
+      const ac = this.контекст();
+      if (!ac) return;
+      const спец = ФОНЫ[this.место];
+      if (!спец) return;
+      const фон = this.фон = { место: this.место, источники: [], таймер: null };
+      for (const [имя, громкость] of спец.слои) {
+        const ждём = this.запись(имя);
+        if (!ждём) continue;
+        ждём.then(buf => {
+          if (!buf || this.фон !== фон) return;
+          const src = ac.createBufferSource();
+          src.buffer = buf;
+          src.loop = true;
+          src.loopStart = Math.min(0.03, buf.duration / 4);
+          src.loopEnd = Math.max(src.loopStart + 0.1, buf.duration - 0.03);
+          const amp = ac.createGain();
+          amp.gain.setValueAtTime(0.0001, ac.currentTime);
+          amp.gain.exponentialRampToValueAtTime(громкость, ac.currentTime + 3);
+          src.connect(amp); amp.connect(this.master);
+          /* Разные слои — с разного места петли, чтобы не начинали хором. */
+          src.start(ac.currentTime, Math.random() * buf.duration * 0.8);
+          фон.источники.push({ src, amp });
+        });
+      }
+      if (спец.разово) {
+        const следующий = () => {
+          const [от, до] = спец.пауза;
+          фон.таймер = setTimeout(() => {
+            if (this.фон !== фон) return;
+            if (!this.уснул && this.enabled) {
+              const [имя, громкость] = спец.разово[Math.floor(Math.random() * спец.разово.length)];
+              this.голос(имя, громкость);
+            }
+            следующий();
+          }, (от + Math.random() * (до - от)) * 1000);
+        };
+        следующий();
+      }
+    }
+
+    фонСтоп() {
+      const фон = this.фон;
+      this.фон = null;
+      if (!фон) return;
+      clearTimeout(фон.таймер);
+      if (!this.ac) return;
+      const t = this.ac.currentTime;
+      for (const { src, amp } of фон.источники) {
+        amp.gain.cancelScheduledValues(t);
+        amp.gain.setValueAtTime(Math.max(0.0001, amp.gain.value), t);
+        amp.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+        src.stop(t + 0.85);
+      }
+    }
+
+    /* Ворон, сова — где-то за оградой: то слева, то справа. */
+    голос(имя, громкость) {
+      const ac = this.wake();
+      if (!ac) return;
+      const ждём = this.запись(имя);
+      if (!ждём) return;
+      ждём.then(buf => {
+        if (!buf || !this.enabled) return;
+        const src = ac.createBufferSource();
+        src.buffer = buf;
+        src.playbackRate.value = 0.92 + Math.random() * 0.16;
+        const amp = ac.createGain();
+        amp.gain.value = громкость * (0.7 + Math.random() * 0.3);
+        let выход = amp;
+        if (ac.createStereoPanner) {
+          const пан = ac.createStereoPanner();
+          пан.pan.value = (Math.random() < 0.5 ? -1 : 1) * (0.4 + Math.random() * 0.5);
+          amp.connect(пан);
+          выход = пан;
+        }
+        src.connect(amp); выход.connect(this.master);
+        src.start();
+      });
     }
 
     /* Одна нота: тип волны, частота, длительность, громкость и задержка. */

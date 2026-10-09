@@ -27,7 +27,6 @@ import { Renderer } from './render3d.js';
   })();
 
   const STORE_KEY = ТЕСТ ? 'darkside-runner-тест' : 'darkside-runner';
-  const ТЕМ_МУЗЫКИ = 3;                 // models/звук/музыка-1…3.mp3
 
   const el = id => document.getElementById(id);
 
@@ -79,7 +78,7 @@ import { Renderer } from './render3d.js';
   /* Звук и музыка — по записи; выключатели в меню и на паузе. Музыка
      включается с первым касанием: раньше браузер звук не пускает. */
   sound.setEnabled(save.sound !== false);
-  sound.тема = Math.min(ТЕМ_МУЗЫКИ, Math.max(1, save.тема || 1));
+  sound.место = Places.текущее(save, ТЕСТ).id;   // у трассы своя музыка и звуки (09.10.2026)
   sound.музыкаВкл = save.music !== false;
   for (const событие of ['pointerdown', 'keydown']) {
     document.addEventListener(событие, () => sound.играть(), { passive: true });
@@ -538,6 +537,7 @@ import { Renderer } from './render3d.js';
           save.место = м.id;
           store();
           sound.buy();
+          sound.сменитьМесто(Places.текущее(save, ТЕСТ).id);
           renderPlaces();
         });
         side.appendChild(btn);
@@ -579,6 +579,7 @@ import { Renderer } from './render3d.js';
     save.место = м.id;
     store();
     sound.buy();
+    sound.сменитьМесто(Places.текущее(save, ТЕСТ).id);
     toast(`${м.имя} открыт — теперь бежим здесь`);
     renderPlaces();
   }
@@ -735,10 +736,6 @@ import { Renderer } from './render3d.js';
     for (const кн of document.querySelectorAll('[data-звук="звуки"]')) {
       кн.textContent = save.sound !== false ? 'Звуки: вкл' : 'Звуки: выкл';
     }
-    for (const кн of document.querySelectorAll('[data-звук="тема"]')) {
-      кн.hidden = !ТЕСТ;
-      кн.textContent = `Тема ${sound.тема} из ${ТЕМ_МУЗЫКИ}`;
-    }
   }
 
   for (const кн of document.querySelectorAll('[data-звук]')) {
@@ -751,11 +748,6 @@ import { Renderer } from './render3d.js';
         save.sound = save.sound === false;
         sound.setEnabled(save.sound);
         if (save.sound) sound.buy();
-      } else if (что === 'тема') {
-        /* Только на тестовой ссылке: владелец слушает и выбирает тему. */
-        save.тема = sound.тема % ТЕМ_МУЗЫКИ + 1;
-        sound.сменитьТему(save.тема);
-        if (save.music === false) { save.music = true; sound.setMusic(true); }
       }
       store();
       обновитьЗвук();
