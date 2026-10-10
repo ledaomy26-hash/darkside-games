@@ -439,6 +439,15 @@ h3 { margin: 8px 0 0; font-size: 15px; color: var(--muted); font-weight: 600; }
   padding: 3px;
 }
 
+/* Рисованные значки вещей и красоты (10.10.2026) — крупнее значков снаряжения,
+   в рост портрета обличья: рисунок с мелочью (крест на крышке, огонь свечения)
+   в 40 точках не разглядеть. */
+.card-icon-big {
+  width: 64px;
+  height: 64px;
+  padding: 2px;
+}
+
 .card-figure {
   width: 40px;
   height: 40px;

@@ -102,6 +102,11 @@ const RUNNER_H = 1.70;                 // рост бегуна в метрах 
    двоичным блоком и общей картинкой-палитрой на все пятьдесят моделей —
    пятьдесят предметов весят полтора мегабайта. Готика и персонажи — .glb,
    каждый со своей картинкой внутри. */
+/* Карета форы (10.10.2026): модель нормирована ростом 1, перёд на +z.
+   Крыша — 0,89 роста, середина крыши на −0,14 по длине (замер по точкам):
+   бегун стоит посередине крыши, карета чуть впереди него. */
+const КАРЕТА = { рост: 2.2, крыша: 2.2 * 0.89, вперёд: 2.2 * 0.14 + 0.15 };
+
 const PATHS = {
   персонаж: name => `models/персонажи/${name}.glb`,
   кладбище: name => `models/кладбище/${name}.gltf`,
@@ -245,8 +250,13 @@ const НОВЫЕ_ТВАРИ = {
        радиусом 3 см) — при повороте головы сдвигались относительно лица, как
        стекляшки перед ним. Теперь сидят в коже: середина на её уровне,
        шарик меньше. */
+    /* 10.10.2026 владелец: «глаза у зомби не на месте, съехали криво, не в
+       глазницах». Снял голову спереди с боковым светом (модель в странице
+       игры, своя камера): голова наклонена набок, глаза модели — под
+       надбровьями, левый ниже (−0,067; 0,871), правый выше (−0,027; 0,889);
+       прежние точки стояли левее на 3 см роста и выше — левый на волосах. */
     глаза: { цвет: 0xeaffa8, радиус: 0.008, ореол: 3.5,
-      точки: [[-0.095, 0.899, 0.161], [-0.047, 0.899, 0.158]] },
+      точки: [[-0.067, 0.871, 0.157], [-0.027, 0.889, 0.157]] },
     /* Веса рук — прежние (29–30.09), теперь в кости.js вместе с позами:
        в покое руки висят, вблизи тянутся к бегуну (04.10.2026). */
     кости: КОСТИ_ТВАРЕЙ.zombie
@@ -786,7 +796,11 @@ const CLIPS = {
     /* Пойман: граф держит сзади (Mixamo «Hostage Situation Idle - Hostage»).
        Прежде бегун замирал на кадре падения и в руках графа стоял непонятно
        (22.09, вечер). */
-    пойман: { клип: 'пойман', безХода: true }
+    пойман: { клип: 'пойман', безХода: true },
+    /* На крышке гроба и на крыше катафалка — стоит, как на скейте (10.10.2026,
+       владелец: «он именно должен на ней стоять, а не бежать… как на скейте»).
+       Mixamo «Skateboarding Idle». Пока клипа в Runner.glb нет, играет бег. */
+    board: { клип: 'доска', безХода: true }
   },
   /* Все клипы графа — без продольного хода (22.09.2026, вечер). Они выгружены
      21.09 не «на месте»: в беге бёдра уезжают на 3,5 м за цикл в 0,63 с, и граф
@@ -1510,6 +1524,9 @@ export class Renderer {
     for (const name of Object.keys(КАМЕНЬ_МОДЕЛИ)) {
       jobs.push(this.fetchModel(name, PATHS.камень(name)).then(g => g && this.обтесать(g)));
     }
+    /* Катафалк форы (10.10.2026) — карета с картинки ChatGPT через TRELLIS.
+       Грузится фоном: фора бывает только с первых метров и не у всех. */
+    this.fetchModel('катафалк-форы', PATHS.камень('катафалк-форы'));
     jobs.push(this.одетьКамень(), this.одетьДорогу(), this.поставитьЗадник(), this.нарисоватьОбочину(),
       this.поставитьЗадникиМест(),
       this.загрузитьСилуэты());
@@ -1983,10 +2000,11 @@ export class Renderer {
     this.текстурыПрепятствий = {};
     await Promise.all(['катафалк-борт', 'катафалк-торец', 'яма-кислота', 'яма-могила',
       'яма-колья', 'паутина', 'крыло-раскрыто', 'крыло-сложено',
+      'мышь-крыло-л', 'мышь-тело', 'мышь-крыло-п',
       ...ЗНАЧКИ.map(з => 'значок-' + з)]
       .map(async name => {
-        /* У препятствий имена с приставкой, у значков и крыльев — свои. */
-        const файл = /^(значок|крыло)-/.test(name) ? name : 'препятствие-' + name;
+        /* У препятствий имена с приставкой, у значков, крыльев и мыши — свои. */
+        const файл = /^(значок|крыло|мышь)-/.test(name) ? name : 'препятствие-' + name;
         const tex = await this.текстура(файл, true);
         if (tex) { tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; this.текстурыПрепятствий[name] = tex; }
       }));
@@ -2579,8 +2597,14 @@ export class Renderer {
     const гр = гроб();
     в.крышка = new THREE.Group();
     const доска = new THREE.Group();
-    доска.add(new THREE.Mesh(гр.дерево, this.деревоMat || new THREE.MeshLambertMaterial({ color: 0x1e1612 })));
-    доска.add(new THREE.Mesh(гр.золото, this.золотоMat || new THREE.MeshLambertMaterial({ color: 0xc9a24a })));
+    /* Своё дерево и золото с подсветкой (10.10.2026): общим деревом обочины
+       крышка под бегуном читалась чёрным чурбаком. */
+    const деревоКрышки = (this.деревоMat || new THREE.MeshLambertMaterial({ color: 0x1e1612 })).clone();
+    деревоКрышки.emissive = new THREE.Color(0x4a2a16);
+    const золотоКрышки = (this.золотоMat || new THREE.MeshLambertMaterial({ color: 0xc9a24a })).clone();
+    золотоКрышки.emissive = new THREE.Color(0x8a6420);
+    доска.add(new THREE.Mesh(гр.дерево, деревоКрышки));
+    доска.add(new THREE.Mesh(гр.золото, золотоКрышки));
     доска.scale.set(0.95, 0.16, 0.8);
     доска.rotation.y = Math.PI / 2;      // гроб вытянут по x — доска идёт вдоль бега
     в.крышка.add(доска);
@@ -2605,8 +2629,38 @@ export class Renderer {
     в.катафалк.visible = false;
     this.scene.add(в.катафалк);
 
-    /* Летучая мышь: тельце, уши, перепонки с картинки крыла, красные глаза. */
+    /* Летучая мышь (10.10.2026) — рисунок ChatGPT из лавки, разрезанный на три
+       части: левое крыло, тело с монетой, правое крыло (models/текстуры/мышь-*.webp).
+       Крылья машут от плеча. Прежняя мышь из шарика с ушами — ниже, запасным
+       путём, если картинок нет. Владелец: «летучая мышь некрасивая, должна быть лучше». */
     в.мышь = new THREE.Group();
+    в.мышьКрылья = [];
+    const тм = this.текстурыПрепятствий || {};
+    if (тм['мышь-тело'] && тм['мышь-крыло-л'] && тм['мышь-крыло-п']) {
+      const S = 0.78, H = S * 0.561, центр = 0.54;       // размах, рост, середина тела в долях картинки
+      const плоскость = (tex, u0, u1, опора, z) => {
+        const гео = new THREE.PlaneGeometry((u1 - u0) * S, H);
+        гео.translate(((u0 + u1) / 2 - опора) * S, 0, z);
+        const мат = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+        const м = new THREE.Mesh(гео, мат);
+        м.renderOrder = 6;
+        return м;
+      };
+      for (const [s, имя, u0, u1, плечо] of [[-1, 'мышь-крыло-л', 0, 0.475, 0.45], [1, 'мышь-крыло-п', 0.61, 1, 0.63]]) {
+        const к = new THREE.Group();
+        к.position.x = (плечо - центр) * S;
+        к.add(плоскость(тм[имя], u0, u1, плечо, 0));
+        в.мышь.add(к);
+        в.мышьКрылья.push({ к, s, картинка: true });
+      }
+      const тело = плоскость(тм['мышь-тело'], 0.42, 0.665, центр, 0.012);
+      тело.renderOrder = 7;
+      в.мышь.add(тело);
+      const ореол = new THREE.Sprite(мягкий(0xff2a3a));
+      ореол.material.opacity = 0.35;
+      ореол.scale.set(0.9, 0.55, 1);
+      в.мышь.add(ореол);
+    } else {
     const чёрный = new THREE.MeshBasicMaterial({ color: 0x0b0a10 });
     const тело = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), чёрный);
     тело.scale.set(1, 1.25, 1);
@@ -2620,7 +2674,6 @@ export class Renderer {
       глаз.position.set(s * 0.035, 0.07, 0.1);
       в.мышь.add(глаз);
     }
-    в.мышьКрылья = [];
     const tex = this.текстурыПрепятствий && this.текстурыПрепятствий['крыло-раскрыто'];
     const ВЫС = 0.3, ШИР = tex ? ВЫС * tex.image.width / tex.image.height : 0.5;
     const гео = new THREE.PlaneGeometry(ШИР, ВЫС);
@@ -2636,8 +2689,20 @@ export class Renderer {
       в.мышь.add(к);
       в.мышьКрылья.push({ к, s });
     }
+    }
     в.мышь.visible = false;
     this.scene.add(в.мышь);
+    в.мышьПоз = null;                    // где мышь сейчас (сглаженно)
+    /* Искры от монет, взятых мышью: летят от монеты к мыши. */
+    в.мышьИскры = [];
+    for (let i = 0; i < 8; i++) {
+      const sp = new THREE.Sprite(мягкий(0xffc24a));
+      sp.visible = false;
+      this.scene.add(sp);
+      в.мышьИскры.push({ sp, жить: 0, от: new THREE.Vector3() });
+    }
+    в.мышьИскраИ = 0;
+    в.мышьВзялаT = -1;
 
     /* След — горсть огоньков, что остаются позади и гаснут. */
     в.след = [];
@@ -2748,11 +2813,38 @@ export class Renderer {
     return url;
   }
 
-  /* Бегун на крышке гроба или на крыше катафалка — выше над мостовой. */
+  /* Бегун на крышке гроба или на крыше катафалка — выше над мостовой.
+     Высоту запоминаем для камеры: на крыше кареты (2 м) бегун иначе
+     уходил бы под верх кадра. */
   подставкаБегуна(world) {
+    this.подставкаВысота = 0;
     if (this.укусС != null) return;
-    if (world.powers && world.powers.фора > 0) this.runnerRoot.position.y += 1.07;
-    else if (world.powers && world.powers.крышка > 0) this.runnerRoot.position.y += 0.14;
+    if (world.powers && world.powers.фора > 0) this.подставкаВысота = this.катафалкКарета() ? КАРЕТА.крыша : 1.07;
+    else if (world.powers && world.powers.крышка > 0) this.подставкаВысота = 0.14;
+    this.runnerRoot.position.y += this.подставкаВысота;
+  }
+
+  /* Карета форы из модели TRELLIS — собирается, когда модель приехала. */
+  катафалкКарета() {
+    if (this.карета) return this.карета;
+    const g = this.models['катафалк-форы'];
+    if (!g) return null;
+    const к = this.карета = new THREE.Group();
+    const модель = g.scene.clone(true);
+    модель.traverse(o => {
+      if (!o.isMesh) return;
+      const m = o.material;
+      /* У TRELLIS металличность около 0,9 — без карты окружения модель чёрная;
+         матовый ламберт и своё тихое свечение, чтобы карету было видно ночью. */
+      o.material = new THREE.MeshLambertMaterial({
+        map: m.map, emissive: 0xffffff, emissiveMap: m.map, emissiveIntensity: 0.55
+      });
+    });
+    модель.scale.setScalar(КАРЕТА.рост);
+    к.add(модель);
+    к.visible = false;
+    this.scene.add(к);
+    return к;
   }
 
   drawВещи(world, time, step) {
@@ -2767,13 +2859,32 @@ export class Renderer {
     /* Крышка под ногами, покачивается, как доска на волне. */
     в.крышка.visible = p.крышка > 0 && !укус;
     if (в.крышка.visible) {
-      в.крышка.position.set(x, y - 0.02, z + 0.1);
+      /* Ноги — посередине доски: при +0,1 бегун стоял на заднем краю (снимок 10.10). */
+      в.крышка.position.set(x, y - 0.02, z - 0.3);
       в.крышка.rotation.set(Math.sin(time * 5) * 0.05, this.runnerRoot.rotation.y, this.runnerRoot.rotation.z * 1.6);
       в.крышкаСвет.material.opacity = p.крышка < 3 ? 0.4 + 0.4 * Math.abs(Math.sin(time * 9)) : 0.55;
     }
 
-    /* Катафалк: бегун на крыше, дроги впереди и под ним. */
-    в.катафалк.visible = p.фора > 0 && !укус;
+    /* Катафалк: бегун стоит на крыше кареты, как на доске (10.10.2026, владелец:
+       «катафалк какой-то непонятный, надо переделать… он не должен по нему
+       бежать, должен на нём стоять, как на скейте»). Карета — модель TRELLIS
+       с картинки ChatGPT; пока она не приехала — прежние дроги. */
+    const карета = this.катафалкКарета();
+    if (карета) {
+      карета.visible = p.фора > 0 && !укус;
+      if (карета.visible) {
+        карета.position.set(x, y - КАРЕТА.крыша + Math.abs(Math.sin(time * 11)) * 0.035, z + КАРЕТА.вперёд);
+        карета.rotation.set(Math.sin(time * 7) * 0.012, 0, this.runnerRoot.rotation.z * 0.4);
+      }
+      /* Огненный след из-под колёс: свет дрог переезжает в сцену, к карете. */
+      if (в.катафалкСвет.parent !== this.scene) this.scene.add(в.катафалкСвет);
+      в.катафалкСвет.visible = карета.visible;
+      if (карета.visible) {
+        в.катафалкСвет.position.set(x, 0.6, z - 1.6);
+        в.катафалкСвет.material.opacity = 0.5 + 0.3 * Math.sin(time * 20);
+      }
+    }
+    в.катафалк.visible = !карета && p.фора > 0 && !укус;
     if (в.катафалк.visible) {
       /* Бегун у заднего края крыши: дроги 9 м — при середине на 2,6 м впереди
          задок заходил к камере и закрывал низ экрана (снимок 09.10). */
@@ -2782,16 +2893,53 @@ export class Renderer {
       в.катафалкСвет.material.opacity = 0.5 + 0.3 * Math.sin(time * 20);
     }
 
-    /* Мышь: вьётся у плеча, то слева, то справа, машет часто. */
+    /* Мышь: вьётся у плеча, то слева, то справа, машет часто. Взяла монету
+       с другой дорожки — на миг кидается туда, низко над монетами, а монета
+       искрой летит к ней (10.10.2026: сбор было не видно — монеты просто
+       пропадали, и казалось, что мышь не собирает вовсе). */
     в.мышь.visible = !!world.мышьРядом && !укус;
     if (в.мышь.visible) {
+      const dt = Math.min(step || 1 / 60, 0.1);
       const кр = Math.sin(time * 1.3);
       /* У плеча, чуть позади: на 0,9 м впереди и на двух метрах она висела
          над дорогой далеко перед бегуном (снимок 09.10). */
-      в.мышь.position.set(x + кр * 0.75, y + 1.75 + Math.sin(time * 3.1) * 0.1, z - 0.25 + Math.cos(time * 1.3) * 0.25);
-      в.мышь.rotation.set(0.2, Math.PI + кр * 0.6, -кр * 0.3);
-      const взмах = Math.sin(time * 22);
-      for (const { к, s } of в.мышьКрылья) к.rotation.set(0, s * 0.3, s * взмах * 0.8);
+      const цель = new THREE.Vector3(x + кр * 0.75, y + 1.75 + Math.sin(time * 3.1) * 0.1, z - 0.25 + Math.cos(time * 1.3) * 0.25);
+      const взяла = world.мышьВзяла;
+      const давно = взяла ? world.time - взяла.t : 9;
+      if (взяла && давно < 0.5) {
+        цель.set(sceneX(взяла.x), Math.max(0.9, взяла.y) + 0.45, z + 0.9);
+      }
+      if (!в.мышьПоз) в.мышьПоз = цель.clone();
+      /* Вперёд мышь не отстаёт — z берётся сразу, вбок и по высоте — плавно. */
+      const k = 1 - Math.exp(-dt * (давно < 0.5 ? 14 : 6));
+      в.мышьПоз.x += (цель.x - в.мышьПоз.x) * k;
+      в.мышьПоз.y += (цель.y - в.мышьПоз.y) * k;
+      в.мышьПоз.z = цель.z;
+      в.мышь.position.copy(в.мышьПоз);
+      const крен = (цель.x - в.мышьПоз.x) * 0.5;
+      в.мышь.rotation.set(0.15, Math.PI + кр * 0.35, Math.max(-0.5, Math.min(0.5, крен)));
+      const взмах = Math.sin(time * 18);
+      for (const { к, s, картинка } of в.мышьКрылья) {
+        if (картинка) к.rotation.set(0, -s * взмах * 0.55, s * взмах * 0.45);
+        else к.rotation.set(0, s * 0.3, s * взмах * 0.8);
+      }
+      /* Новая взятая монета — новая искра. */
+      if (взяла && взяла.t !== в.мышьВзялаT) {
+        в.мышьВзялаT = взяла.t;
+        const и = в.мышьИскры[в.мышьИскраИ++ % в.мышьИскры.length];
+        и.от.set(sceneX(взяла.x), взяла.y, Math.max(взяла.z, z));
+        и.жить = 0.28;
+        и.sp.visible = true;
+      }
+    }
+    for (const и of в.мышьИскры) {
+      if (!и.sp.visible) continue;
+      и.жить -= Math.min(step || 1 / 60, 0.1);
+      if (и.жить <= 0 || !в.мышь.visible) { и.sp.visible = false; continue; }
+      const t = 1 - и.жить / 0.28;
+      и.sp.position.lerpVectors(и.от, в.мышь.position, t * t);
+      и.sp.scale.setScalar(0.55 * (1 - t) + 0.15);
+      и.sp.material.opacity = 1 - t * 0.6;
     }
 
     /* След: новый огонёк каждые 6 см пути, живёт 0,7 с, поднимается и гаснет. */
@@ -4856,10 +5004,10 @@ export class Renderer {
 
     this.camera.position.set(
       this.camX + (Math.random() - 0.5) * jitter,
-      CAM_Y + world.ground * 0.5 + (Math.random() - 0.5) * jitter,
+      CAM_Y + world.ground * 0.5 + (this.подставкаВысота || 0) * 0.7 + (Math.random() - 0.5) * jitter,
       world.z - this.camBack
     );
-    this.camera.lookAt(sceneX(world.x) * 0.35, 1.5 + world.ground * 0.4, world.z + CAM_LOOK);
+    this.camera.lookAt(sceneX(world.x) * 0.35, 1.5 + world.ground * 0.4 + (this.подставкаВысота || 0) * 0.6, world.z + CAM_LOOK);
 
     /* Укус: отсчёт от третьего падения (world.doomed). После продолжения за
        ролик движок снимает doomed, и сцена сама кончается. */
@@ -5275,6 +5423,7 @@ export class Renderer {
     if (phase) this.playFall(phase);
     else if (world.powers.wings > 0) this.playRunner('fly');
     else if (world.sliding > 0) this.playRunner('crouch');
+    else if ((world.powers.крышка > 0 || world.powers.фора > 0) && world.onGround) this.playRunner('board');
     else if (!world.onGround) this.playRunner('jump');
     else if (world.stumble > 0) this.playRunner('walk');
     else this.playRunner('sprint');

@@ -272,8 +272,9 @@ import { Renderer } from './render3d.js';
     return btn;
   }
 
-  /* Значки сняты с самих вещей игры (render3d.js значокВещи, ЗНАЧКИ=1). */
-  const значокВещи = id => `<img class="card-icon" src="${картинкаЛавки('лавка-вещь-' + id)}" alt="">`;
+  /* Значки вещей и красоты — рисунки ChatGPT в стиле значков снаряжения (10.10.2026,
+     владелец: «должны быть красивые изображения, как в обличье и снаряжении»). */
+  const значокВещи = id => `<img class="card-icon card-icon-big" src="${картинкаЛавки('лавка-вещь-' + id)}" alt="">`;
 
   function renderRewards() {
     dom.rewardsCoins.textContent = число(save.coins);
@@ -431,9 +432,8 @@ import { Renderer } from './render3d.js';
       for (const к of Shop.КРАСОТА[ряд]) {
         const ключ = ряд + ':' + к.id;
         const своё = !к.cost.coins || (save.красотаКуплено || []).includes(ключ);
-        const hex = к.цвет ? '#' + к.цвет.toString(16).padStart(6, '0') : null;
-        const кар = карточка(`<div class="swatch" style="${hex ? `background:radial-gradient(circle,${hex},#0b0d14 72%);box-shadow:0 0 16px ${hex}55` : ''}"></div>`,
-          к.name, hex ? 'Цвет виден на бегу.' : 'Как было.', надето === к.id ? 'card-active' : своё ? 'card-owned' : '');
+        const кар = карточка(`<img class="card-icon card-icon-big" src="${картинкаЛавки('лавка-' + ряд + '-' + к.id)}" alt="">`,
+          к.name, к.цвет ? 'Цвет виден на бегу.' : 'Как было.', надето === к.id ? 'card-active' : своё ? 'card-owned' : '');
         const side = кар.querySelector('.card-side');
         if (надето === к.id) side.innerHTML = '<span class="pill pill-quiet">Надето</span>';
         else if (своё) side.appendChild(кнопка('Надеть', () => {
