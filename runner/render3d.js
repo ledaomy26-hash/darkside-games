@@ -104,8 +104,11 @@ const RUNNER_H = 1.70;                 // рост бегуна в метрах 
    каждый со своей картинкой внутри. */
 /* Карета форы (10.10.2026): модель нормирована ростом 1, перёд на +z.
    Крыша — 0,89 роста, середина крыши на −0,14 по длине (замер по точкам):
-   бегун стоит посередине крыши, карета чуть впереди него. */
-const КАРЕТА = { рост: 2.2, крыша: 2.2 * 0.89, вперёд: 2.2 * 0.14 + 0.15 };
+   бегун стоит посередине крыши, карета чуть впереди него.
+   13.10.2026, владелец: «катафалк практически не видно… меньше в высоту и чуть
+   дальше». Было ровно 2,2; теперь длина и ширина 1,7, высота 1,4 (крыша 1,25 м
+   вместо 1,96), а камера на время форы отходит на `камераДальше` метров. */
+const КАРЕТА = { рост: 1.7, высота: 1.4, крыша: 1.4 * 0.89, вперёд: 1.7 * 0.14 + 0.15, камераДальше: 2.5 };
 
 const PATHS = {
   персонаж: name => `models/персонажи/${name}.glb`,
@@ -2837,11 +2840,31 @@ export class Renderer {
       /* У TRELLIS металличность около 0,9 — без карты окружения модель чёрная;
          матовый ламберт и своё тихое свечение, чтобы карету было видно ночью. */
       o.material = new THREE.MeshLambertMaterial({
-        map: m.map, emissive: 0xffffff, emissiveMap: m.map, emissiveIntensity: 0.55
+        map: m.map, emissive: 0xffffff, emissiveMap: m.map, emissiveIntensity: 0.75
       });
     });
-    модель.scale.setScalar(КАРЕТА.рост);
+    модель.scale.set(КАРЕТА.рост, КАРЕТА.высота, КАРЕТА.рост);
     к.add(модель);
+    /* 13.10.2026: в игре карета читалась тёмным ящиком. Огонь в двух фонарях
+       облучка (по точкам модели: x ±0,40, высота 0,64, z 0,51) и лиловый отсвет
+       на задней стенке — со стороны камеры. */
+    const огонь = (цвет, размер, x, y, z, сила) => {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: this.glowTexture(цвет), transparent: true, depthWrite: false,
+        blending: THREE.AdditiveBlending, opacity: сила
+      }));
+      sp.scale.set(размер, размер, 1);
+      sp.position.set(x * КАРЕТА.рост, y * КАРЕТА.высота, z * КАРЕТА.рост);
+      sp.userData.сила = сила;
+      к.add(sp);
+      return sp;
+    };
+    к.userData.огни = [];
+    for (const x of [-0.40, 0.40]) {
+      к.userData.огни.push(огонь(0xffd27a, 0.22, x, 0.64, 0.51, 1.0), огонь(0xff9a3a, 0.75, x, 0.64, 0.51, 0.6));
+    }
+    к.userData.отсвет = огонь(0x9b5cff, 1.6, 0, 0.5, -0.72, 0.32);
+    к.userData.отсвет.scale.set(1.9, 1.3, 1);
     к.visible = false;
     this.scene.add(к);
     return к;
@@ -2875,6 +2898,9 @@ export class Renderer {
       if (карета.visible) {
         карета.position.set(x, y - КАРЕТА.крыша + Math.abs(Math.sin(time * 11)) * 0.035, z + КАРЕТА.вперёд);
         карета.rotation.set(Math.sin(time * 7) * 0.012, 0, this.runnerRoot.rotation.z * 0.4);
+        карета.userData.огни.forEach((о, i) => {
+          о.material.opacity = о.userData.сила * (0.8 + 0.2 * Math.sin(time * 13 + i * 1.7) * Math.sin(time * 5.3 + i));
+        });
       }
       /* Огненный след из-под колёс: свет дрог переезжает в сцену, к карете. */
       if (в.катафалкСвет.parent !== this.scene) this.scene.add(в.катафалкСвет);
@@ -5001,6 +5027,9 @@ export class Renderer {
        его спиной растёт, и загнанность видна в самой картинке, а не только
        в полоске наверху. */
     this.camBack = CAM_BACK + world.chase * 2.0;
+    /* На карете форы камера отходит дальше — иначе карету почти не видно (13.10). */
+    this.камераФора = (this.камераФора || 0) + ((world.powers && world.powers.фора > 0 && this.карета ? КАРЕТА.камераДальше : 0) - (this.камераФора || 0)) * Math.min(1, step * 3);
+    this.camBack += this.камераФора;
 
     this.camera.position.set(
       this.camX + (Math.random() - 0.5) * jitter,
