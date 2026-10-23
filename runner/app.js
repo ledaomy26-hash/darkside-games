@@ -37,7 +37,6 @@ import { Renderer } from './render3d.js';
     coins: el('hud-coins'),
     gems: el('hud-gems'),
     lives: el('hud-lives'),
-    chaseName: el('chase-name'),
     powers: el('powers'),
     toast: el('toast'),
 
@@ -557,7 +556,6 @@ import { Renderer } from './render3d.js';
     dom.distance.textContent = world.distance;
     dom.coins.textContent = world.coins;
     dom.gems.textContent = world.gems;
-    dom.chaseName.textContent = world.hunter.name;
 
     /* Черепа перерисовываются только при потере: разметка HUD не должна
        пересобираться каждый кадр. */
