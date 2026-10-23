@@ -278,6 +278,9 @@ import { Renderer } from './render3d.js';
   /* Значки вещей и красоты — рисунки ChatGPT в стиле значков снаряжения (10.10.2026,
      владелец: «должны быть красивые изображения, как в обличье и снаряжении»). */
   const значокВещи = id => `<img class="card-icon card-icon-big" src="${картинкаЛавки('лавка-вещь-' + id)}" alt="">`;
+  /* Значки «Наград» (23.10.2026, владелец: «картинок нет, иконка одноцветная —
+     какие-нибудь интересные»): подарок, свиток заданий, плёнка ролика — бот @agentai. */
+  const значокНаграды = id => `<img class="card-icon card-icon-big" src="${картинкаЛавки('награда-' + id)}" alt="">`;
 
   function renderRewards() {
     dom.rewardsCoins.textContent = число(save.coins);
@@ -290,7 +293,7 @@ import { Renderer } from './render3d.js';
     const дар = Shop.дарДня(save, день);
     const подряд = дар ? дар.подряд : save.дарПодряд || 1;
     const приз = дар ? дар.приз : Shop.ДАРЫ[(save.дарПодряд || 1) % Shop.ДАРЫ.length];
-    const кДар = карточка('<div class="swatch" style="background:radial-gradient(circle,#fbbf24,#7c2d12)"></div>',
+    const кДар = карточка(значокНаграды('дар'),
       `Дар дня — ${подряд}-й день подряд`,
       дар ? `Сегодня: ${Shop.подписьПриза(приз)}. Седьмой день — сундук.` : `Забран. Завтра: ${Shop.подписьПриза(приз)}.`,
       дар ? '' : 'card-owned');
@@ -314,7 +317,7 @@ import { Renderer } from './render3d.js';
     const { список: задания, з } = заданияСегодня();
     задания.forEach((зад, i) => {
       const n = Math.min(зад.нужно, з.счёт[зад.id] || 0);
-      const к = карточка('<div class="swatch" style="background:linear-gradient(135deg,#8b5cf6,#22d3ee)"></div>',
+      const к = карточка(значокНаграды('задания'),
         зад.текст,
         `${число(n)} из ${число(зад.нужно)} · награда ${число(зад.награда.coins)} монет и ${зад.награда.gems} кр.` +
         `<div class="progress"><i style="width:${Math.round(n / зад.нужно * 100)}%"></i></div>`,
@@ -326,7 +329,7 @@ import { Renderer } from './render3d.js';
 
     /* Ролик раз в час. */
     const осталось = ЧАС - (Date.now() - (save.роликМеню || 0));
-    const кРолик = карточка('<div class="swatch" style="background:radial-gradient(circle,#f43f5e,#3b0712)"></div>',
+    const кРолик = карточка(значокНаграды('ролик'),
       `Ролик — ${РОЛИК_МЕНЮ} монет`,
       осталось > 0 ? `Следующий через ${Math.ceil(осталось / 60000)} мин.` : 'Раз в час: посмотри ролик и забери монеты.');
     кРолик.querySelector('.card-side').appendChild(кнопка('Смотреть', async () => {
