@@ -626,7 +626,9 @@ const НАРЯДЫ = {
   gravedigger: { карта: 'наряд-могильщик', свечение: 0.34 },
   plague: {
     карта: 'наряд-чумной', свечение: 0.30,
-    клюв: { длина: 0.0016, радиус: 0.00046, цвет: 0x2b2b38 },
+    /* Клюв снят 23.10.2026 (владелец: «когда вампир кусает, непонятно — маска,
+       что ли, или чёрное пятно у бегуна на лице; пусть будут очки тёмные»). */
+    очки: { стекло: 0x0b0b16, оправа: 0x3a3440 },
     шляпа: { поля: 0.00185, тулья: 0.0013, радиус: 0.00102, цвет: 0x23232e, лента: 0x5a5a6b }
   },
   ghost: {
@@ -2707,16 +2709,58 @@ export class Renderer {
     в.мышьИскраИ = 0;
     в.мышьВзялаT = -1;
 
-    /* След — горсть огоньков, что остаются позади и гаснут. */
+    /* След (23.10.2026 переделан; владелец: «не так красиво, как на картинке…
+       я думал, за ним прям будет шлейф: золотые искры, как огненное пламя,
+       могильный туман — зелёное пламя, кровавый след»). Прежде — горсть
+       одинаковых пятен разного цвета. Теперь у каждого свой нрав: искры —
+       огонь, что рвётся вверх и гаснет из жёлтого в багровое, с россыпью
+       мелких искр; туман — клубы зелёного пламени, что расползаются у земли;
+       кровь — капли летят из-под ног, падают и пятнами ложатся на мостовую. */
+    const искраХолст = document.createElement('canvas');
+    искраХолст.width = искраХолст.height = 32;
+    const ик = искраХолст.getContext('2d');
+    const иг = ик.createRadialGradient(16, 16, 0, 16, 16, 16);
+    иг.addColorStop(0, 'rgba(255,255,255,1)');
+    иг.addColorStop(0.2, 'rgba(255,255,255,0.9)');
+    иг.addColorStop(0.5, 'rgba(255,255,255,0.22)');
+    иг.addColorStop(1, 'rgba(255,255,255,0)');
+    ик.fillStyle = иг;
+    ик.fillRect(0, 0, 32, 32);
+    в.искра = new THREE.CanvasTexture(искраХолст);
     в.след = [];
-    for (let i = 0; i < 36; i++) {
-      const sp = new THREE.Sprite(мягкий(0xffffff));
+    for (let i = 0; i < 150; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: в.пятно, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+      }));
       sp.visible = false;
       this.scene.add(sp);
-      в.след.push({ sp, жить: 0 });
+      в.след.push({ sp, жить: 0, срок: 1, v: new THREE.Vector3(), вид: '', размер: 1 });
+    }
+    /* Капли крови — без сложения света: кровь тёмная, а не светится. */
+    в.капли = [];
+    for (let i = 0; i < 48; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: в.искра, color: 0xc0101c, transparent: true, depthWrite: false
+      }));
+      sp.visible = false;
+      this.scene.add(sp);
+      в.капли.push({ sp, жить: 0, v: new THREE.Vector3() });
+    }
+    в.кляксы = [];
+    const кляксаГео = new THREE.CircleGeometry(0.5, 18);
+    for (let i = 0; i < 28; i++) {
+      const м = new THREE.Mesh(кляксаГео, new THREE.MeshBasicMaterial({
+        map: в.пятно, color: 0x8a0010, transparent: true, depthWrite: false
+      }));
+      м.rotation.x = -Math.PI / 2;
+      м.visible = false;
+      this.scene.add(м);
+      в.кляксы.push({ м, жить: 0 });
     }
     в.следШаг = 0;
     в.следИ = 0;
+    в.каплиИ = 0;
+    в.кляксыИ = 0;
 
     /* Свечение — ореол за спиной и пятно света под ногами. */
     в.ореол = new THREE.Sprite(мягкий(0xffffff));
@@ -2873,7 +2917,7 @@ export class Renderer {
   drawВещи(world, time, step) {
     const p = world.powers || {};
     const нужно = p.крышка > 0 || p.фора > 0 || world.мышьРядом || (world.красота &&
-      (world.красота.след || world.красота.свечение)) || this.вещи;
+      (world.красота.след || world.красота.свечение || world.красота.крылья)) || this.вещи;
     if (!нужно) return;
     const в = this.вещиСобрать();
     const x = sceneX(world.x), z = world.z, y = this.runnerRoot.position.y;
@@ -2968,27 +3012,111 @@ export class Renderer {
       и.sp.material.opacity = 1 - t * 0.6;
     }
 
-    /* След: новый огонёк каждые 6 см пути, живёт 0,7 с, поднимается и гаснет. */
+    /* След — только на земле (23.10.2026, владелец: «когда он поднимается на
+       крыльях, шлейф за ним так и тянется… мешает посмотреть, какими крыльями
+       машет»). Огоньки живут в мире, бегун убегает вперёд — шлейф тянется сам. */
     const кр = world.красота || {};
-    if (кр.след && !укус && world.speed > 0.5) {
-      в.следШаг += world.speed * (step || 1 / 60);
-      while (в.следШаг > 0.35) {
-        в.следШаг -= 0.35;
-        const о = в.след[в.следИ++ % в.след.length];
-        о.жить = 0.7;
-        о.sp.material.color.setHex(кр.след);
-        о.sp.position.set(x + (Math.random() - 0.5) * 0.3, y + 0.25 + Math.random() * 0.5, z - 0.3);
-        о.sp.visible = true;
+    const dt = Math.min(step || 1 / 60, 0.1);
+    const вид = кр.видСледа || (кр.след ? 'искры' : '');
+    const ЦВ = this._цветаСледа || (this._цветаСледа = {
+      жёлтый: new THREE.Color(0xffb424), рыжий: new THREE.Color(0xff5208), багровый: new THREE.Color(0x7a0c00),
+      мята: new THREE.Color(0x3cff78), зелёный: new THREE.Color(0x08c838), болото: new THREE.Color(0x053a14),
+      алый: new THREE.Color(0xff2a3a)
+    });
+    const пустить = (вид2, срок, размер, px, py, pz, vx, vy, vz, карта) => {
+      const о = в.след[в.следИ++ % в.след.length];
+      о.вид = вид2; о.срок = о.жить = срок; о.размер = размер;
+      о.sp.material.map = карта;
+      о.sp.position.set(px, py, pz);
+      о.v.set(vx, vy, vz);
+      о.sp.visible = true;
+    };
+    const r = () => Math.random() - 0.5;
+    if (кр.след && !укус && world.speed > 0.5 && !(p.wings > 0)) {
+      в.следШаг += world.speed * dt;
+      const шаг = вид === 'туман' ? 0.22 : вид === 'кровь' ? 0.28 : 0.11;
+      while (в.следШаг > шаг) {
+        в.следШаг -= шаг;
+        /* Огонёк рождается там, где бегун был, когда прошёл этот шаг: при
+           редких кадрах иначе вся горсть ложится в одну точку белым пятном. */
+        const зад = z - 0.25 - в.следШаг - Math.random() * 0.3;
+        if (вид === 'искры') {
+          /* Языки пламени у пяток и россыпь искр, что рвутся вверх. */
+          пустить('пламя', 0.6 + Math.random() * 0.3, 0.38 + Math.random() * 0.18,
+            x + r() * 0.35, y + 0.15 + Math.random() * 0.35, зад, r() * 0.4, 1.4 + Math.random(), -0.6, в.пятно);
+          пустить('искра', 0.9 + Math.random() * 0.5, 0.15 + Math.random() * 0.1,
+            x + r() * 0.3, y + 0.3 + Math.random() * 0.6, зад, r() * 2.2, 1.5 + Math.random() * 2.2, -1.2 + r(), в.искра);
+        } else if (вид === 'туман') {
+          /* Клубы у земли расползаются, над ними — зелёные языки. */
+          пустить('клуб', 1.2 + Math.random() * 0.5, 0.5 + Math.random() * 0.25,
+            x + r() * 0.5, 0.18 + Math.random() * 0.25, зад, r() * 0.7, 0.25 + Math.random() * 0.25, -0.3, в.пятно);
+          if (Math.random() < 0.7) пустить('язык', 0.7 + Math.random() * 0.3, 0.42 + Math.random() * 0.2,
+            x + r() * 0.35, y + 0.2 + Math.random() * 0.4, зад, r() * 0.3, 1.1 + Math.random() * 0.8, -0.4, в.пятно);
+        } else if (вид === 'кровь') {
+          /* Капля из-под ног: летит, падает, ложится кляксой. И тусклое алое марево. */
+          const к = в.капли[в.каплиИ++ % в.капли.length];
+          к.жить = 1.5;
+          к.sp.position.set(x + r() * 0.3, y + 0.35 + Math.random() * 0.5, зад);
+          к.v.set(r() * 1.6, 1 + Math.random() * 1.8, -0.8 - Math.random());
+          к.sp.scale.setScalar(0.13 + Math.random() * 0.08);
+          к.sp.visible = true;
+          пустить('марево', 0.5, 0.45, x + r() * 0.3, y + 0.3 + Math.random() * 0.4, зад, 0, 0.3, -0.3, в.пятно);
+        } else {
+          пустить('пламя', 0.7, 0.35, x + r() * 0.3, y + 0.25 + Math.random() * 0.5, z - 0.3, 0, 0.5, 0, в.пятно);
+        }
       }
     }
     for (const о of в.след) {
       if (!о.sp.visible) continue;
-      о.жить -= step || 1 / 60;
+      о.жить -= dt;
       if (о.жить <= 0) { о.sp.visible = false; continue; }
-      const t = о.жить / 0.7;
-      о.sp.position.y += (step || 1 / 60) * 0.5;
-      о.sp.scale.setScalar(0.35 * (0.4 + t));
-      о.sp.material.opacity = t * 0.85;
+      const t = 1 - о.жить / о.срок;          // 0 — родился, 1 — погас
+      const м = о.sp.material;
+      о.sp.position.addScaledVector(о.v, dt);
+      if (о.вид === 'искра') {
+        о.v.y -= 3.5 * dt;                    // искры тяжелеют и падают
+        м.color.copy(ЦВ.жёлтый).lerp(ЦВ.рыжий, t);
+        м.opacity = (1 - t) * (0.75 + 0.25 * Math.sin(time * 40 + о.размер * 99));   // мерцают
+        о.sp.scale.setScalar(о.размер);
+      } else if (о.вид === 'пламя') {
+        м.color.copy(ЦВ.жёлтый).lerp(ЦВ.рыжий, Math.min(1, t * 2)).lerp(ЦВ.багровый, Math.max(0, t * 2 - 1));
+        м.opacity = (1 - t) * 0.42;
+        о.sp.scale.set(о.размер * (1 - t * 0.6), о.размер * (1.3 - t * 0.5), 1);   // язык вытянут вверх
+      } else if (о.вид === 'клуб') {
+        о.v.multiplyScalar(1 - dt * 0.8);
+        м.color.copy(ЦВ.зелёный).lerp(ЦВ.болото, t);
+        м.opacity = Math.sin(Math.PI * Math.min(1, t * 1.4)) * 0.24;
+        о.sp.scale.set(о.размер * (1 + t * 1.6), о.размер * (0.7 + t * 0.9), 1);
+      } else if (о.вид === 'язык') {
+        м.color.copy(ЦВ.мята).lerp(ЦВ.зелёный, Math.min(1, t * 1.5));
+        м.opacity = (1 - t) * 0.6;
+        о.sp.scale.set(о.размер * (1 - t * 0.5), о.размер * (1.6 - t * 0.6), 1);
+      } else if (о.вид === 'марево') {
+        м.color.copy(ЦВ.алый);
+        м.opacity = (1 - t) * 0.3;
+        о.sp.scale.setScalar(о.размер * (1 + t));
+      }
+    }
+    for (const к of в.капли) {
+      if (!к.sp.visible) continue;
+      к.жить -= dt;
+      к.v.y -= 9.8 * dt;
+      к.sp.position.addScaledVector(к.v, dt);
+      if (к.sp.position.y <= 0.03 || к.жить <= 0) {
+        к.sp.visible = false;
+        const кл = в.кляксы[в.кляксыИ++ % в.кляксы.length];
+        кл.жить = 2.4;
+        кл.м.position.set(к.sp.position.x, 0.025 + (в.кляксыИ % 7) * 0.002, к.sp.position.z);
+        кл.м.scale.set(0.35 + Math.random() * 0.35, 0.25 + Math.random() * 0.3, 1);
+        кл.м.rotation.z = Math.random() * Math.PI;
+        кл.м.visible = true;
+      }
+    }
+    for (const кл of в.кляксы) {
+      if (!кл.м.visible) continue;
+      кл.жить -= dt;
+      if (кл.жить <= 0) { кл.м.visible = false; continue; }
+      кл.м.material.opacity = Math.min(1, кл.жить / 0.8) * 0.9;
     }
 
     /* Свечение: ореол за спиной дышит, под ногами — пятно цвета. */
@@ -3003,9 +3131,48 @@ export class Renderer {
       в.пол.material.opacity = 0.5;
     }
 
-    /* Крылья — в цвет, что выбран в лавке (умножается на картинку). */
+    /* Крылья — в цвет, что выбран в лавке. Цвет умножается на картинку, а на
+       ней красные жилы: зелёный на красном давал чёрно-красные проступы
+       (23.10.2026, владелец: «выбрал зелёный, но они не полностью зелёные,
+       проступает красное»). Цветным крыльям — та же картинка в серых тонах,
+       тогда весь рисунок берёт выбранный цвет. Пыльца с крыльев — того же цвета. */
     const цвет = кр.крылья || 0xffffff;
-    for (const { group } of this.wingPair || []) group.children[0].material.color.setHex(цвет);
+    const серые = кр.крылья ? this.крыльяСерые() : null;
+    for (const { group } of this.wingPair || []) {
+      const м = group.children[0].material;
+      if (!м.map) continue;
+      if (!м.userData.родная) м.userData.родная = м.map;
+      const карта = серые || м.userData.родная;
+      if (м.map !== карта) { м.map = карта; м.needsUpdate = true; }
+      м.color.setHex(цвет);
+    }
+    for (const sp of this.wingSparks || []) sp.material.color.setHex(цвет);
+  }
+
+  /* Картинка крыла в серых тонах — для крыльев цвета из лавки. Яркость берётся
+     по самому светлому из трёх каналов: красные жилы остаются светлыми и
+     читаются рисунком, а не проваливаются в черноту. Прозрачность — родная. */
+  крыльяСерые() {
+    if (this._крыльяСерые !== undefined) return this._крыльяСерые;
+    const tex = this.текстурыПрепятствий && this.текстурыПрепятствий['крыло-раскрыто'];
+    this._крыльяСерые = null;
+    if (!tex || !tex.image) return null;
+    const ш = tex.image.width, в = tex.image.height;
+    const холст = document.createElement('canvas');
+    холст.width = ш; холст.height = в;
+    const к = холст.getContext('2d');
+    к.drawImage(tex.image, 0, 0);
+    const д = к.getImageData(0, 0, ш, в);
+    const п = д.data;
+    for (let i = 0; i < п.length; i += 4) {
+      const ярк = Math.min(255, Math.max(п[i], п[i + 1], п[i + 2]) * 1.15);
+      п[i] = п[i + 1] = п[i + 2] = ярк;
+    }
+    к.putImageData(д, 0, 0);
+    const серые = new THREE.CanvasTexture(холст);
+    серые.colorSpace = tex.colorSpace;
+    серые.flipY = tex.flipY;
+    return (this._крыльяСерые = серые);
   }
 
   drawWings(world, time) {
@@ -3124,6 +3291,42 @@ export class Renderer {
       клюв.rotation.x = Math.PI / 2;               // остриём вперёд
       клюв.position.set(x0 + Л.переносица[0], Л.переносица[1], Л.переносица[2] + К.длина / 2);
       head.add(клюв);
+    }
+
+    /* Тёмные круглые очки чумного доктора: два стекла на месте глаз, оправа,
+       перемычка и дужки назад, к ушам. Стекло с лёгким отблеском — иначе
+       на ночной дороге очки снова читались бы чёрным пятном. */
+    if (наряд.очки) {
+      const О = наряд.очки;
+      const R = Л.радиусГлаза * 2.4;               // стекло вдвое с лишним шире глаза
+      const стекло = new THREE.MeshLambertMaterial({ color: О.стекло, emissive: 0x161628, emissiveIntensity: 1 });
+      const оправа = new THREE.MeshLambertMaterial({ color: О.оправа, emissive: О.оправа, emissiveIntensity: 0.5 });
+      const блик = new THREE.MeshBasicMaterial({ color: 0x8a90b0, transparent: true, opacity: 0.55 });
+      const очки = new THREE.Group();
+      const zО = Л.глаза[0][2] + Л.радиусГлаза * 0.9;
+      for (const [x, y] of Л.глаза) {
+        const с = new THREE.Mesh(new THREE.CylinderGeometry(R, R, R * 0.12, 20), стекло);
+        с.rotation.x = Math.PI / 2;
+        с.position.set(x, y, zО);
+        очки.add(с);
+        const обод = new THREE.Mesh(new THREE.TorusGeometry(R, R * 0.13, 6, 24), оправа);
+        обод.position.set(x, y, zО);
+        очки.add(обод);
+        const б = new THREE.Mesh(new THREE.CircleGeometry(R * 0.28, 10), блик);
+        б.position.set(x - R * 0.35, y + R * 0.35, zО + R * 0.07);
+        очки.add(б);
+        /* Дужка от наружного края стекла назад, к уху. */
+        const наружу = Math.sign(x - x0) || 1;
+        const дл = Л.глаза[0][2] * 0.6;
+        const д = new THREE.Mesh(new THREE.BoxGeometry(R * 0.16, R * 0.16, дл), оправа);
+        д.position.set(x + наружу * R * 1.05, y + R * 0.1, zО - дл / 2);
+        очки.add(д);
+      }
+      const [[xл, yл], [xп]] = Л.глаза;
+      const мост = new THREE.Mesh(new THREE.BoxGeometry(Math.abs(xп - xл) - 2 * R, R * 0.14, R * 0.14), оправа);
+      мост.position.set((xл + xп) / 2, yл + R * 0.3, zО);
+      очки.add(мост);
+      head.add(очки);
     }
 
     if (наряд.клыки) {

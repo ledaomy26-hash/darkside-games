@@ -555,6 +555,12 @@ h3 { margin: 8px 0 0; font-size: 15px; color: var(--muted); font-weight: 600; }
 .help-item b { font-size: 14px; }
 .help-item span { font-size: 12px; color: var(--muted); }
 
+/* Значок из игры рядом с объяснением (23.10.2026, владелец: «иконки, которые
+   в игре, ты сюда не поставил»). */
+.help-item-icon { flex-direction: row; align-items: center; gap: 11px; }
+.help-item-icon img { width: 46px; height: 46px; flex: none; object-fit: contain; border-radius: 10px; }
+.help-item-icon div { display: flex; flex-direction: column; gap: 3px; }
+
 .note {
   margin: 0;
   font-size: 13px;
