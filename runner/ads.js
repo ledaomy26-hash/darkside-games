@@ -65,7 +65,10 @@
      из них отменяет всю покупку: половина просмотренного ничего не даёт. */
   async function showSeries(count) {
     for (let i = 1; i <= count; i++) {
-      const ok = await show(i, count);
+      /* Через window.RunnerAds, а не напрямую: в приложении native.js подменяет
+         show настоящим роликом РСЯ, и серия обязана идти через него (23.10.2026:
+         продолжение за ролик показывало заглушку вместо рекламы). */
+      const ok = await window.RunnerAds.show(i, count);
       if (!ok) return false;
     }
     return true;

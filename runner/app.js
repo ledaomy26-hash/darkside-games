@@ -387,6 +387,53 @@ import { Renderer } from './render3d.js';
     }
   }
 
+  /* Покупки за рубли (23.10.2026). В приложении — RuStore Pay через native.js
+     (window.RunnerPay), на сайте — только надпись: платить там нечем. Номера
+     товаров — те же, что заведены в RuStore Консоли → «Монетизация»; все товары
+     разовые «навсегда» и восстанавливаются после переустановки. */
+  const ТОВАРЫ_RUSTORE = {
+    мышь: 'runner_bat', удвоитель: 'runner_doubler',
+    подземелье: 'runner_dungeon', замок: 'runner_castle'
+  };
+
+  function выдатьТовар(id) {
+    if (Places.МЕСТА.some(м => м.id === id)) {
+      if (!(save.места || []).includes(id)) save.места = (save.места || []).concat(id);
+    } else if (!(save.куплено || []).includes(id)) {
+      save.куплено.push(id);
+    }
+  }
+
+  async function купитьЗаРубли(id, имя) {
+    if (!window.RunnerPay) { sound.deny(); toast('Купить за рубли можно будет в приложении'); return false; }
+    if (!(await window.RunnerPay.available())) { sound.deny(); toast('Оплата сейчас недоступна, попробуй позже'); return false; }
+    const ответ = await window.RunnerPay.buy(ТОВАРЫ_RUSTORE[id]);
+    if (!ответ.ok) {
+      if (!ответ.cancelled) { sound.deny(); toast('Оплата не прошла'); }
+      return false;
+    }
+    выдатьТовар(id);
+    store(); sound.buy();
+    toast(`${имя} — твоё навсегда`, 2600);
+    return true;
+  }
+
+  /* Купленное за рубли — с сервера RuStore: на новом телефоне или после
+     переустановки покупки возвращаются сами. */
+  async function восстановитьПокупки() {
+    if (!window.RunnerPay || ТЕСТ) return;
+    const куплено = await window.RunnerPay.owned();
+    const назад = Object.fromEntries(Object.entries(ТОВАРЫ_RUSTORE).map(([id, товар]) => [товар, id]));
+    let новое = false;
+    for (const товар of куплено) {
+      const id = назад[товар];
+      if (!id) continue;
+      const было = (save.куплено || []).includes(id) || (save.места || []).includes(id);
+      if (!было) { выдатьТовар(id); новое = true; }
+    }
+    if (новое) { store(); refreshMenu(); }
+  }
+
   /* Лавка: вещи. */
   function renderItems() {
     dom.shopItems.innerHTML = '';
@@ -415,7 +462,9 @@ import { Renderer } from './render3d.js';
           renderShop();
         }, !Shop.canAfford(save, в.cost).ok));
         if (в.рубли) {
-          const р = кнопка(`${число(в.рубли)} ₽`, () => { sound.deny(); toast('Купить за рубли можно будет в приложении'); });
+          const р = кнопка(`${число(в.рубли)} ₽`, async () => {
+            if (await купитьЗаРубли(в.id, в.name)) renderShop();
+          });
           р.className = 'pill pill-quiet';
           side.appendChild(р);
         }
@@ -897,9 +946,13 @@ import { Renderer } from './render3d.js';
           рубли.className = 'pill pill-quiet';
           рубли.type = 'button';
           рубли.textContent = `${число(м.рубли)} ₽`;
-          рубли.addEventListener('click', () => {
-            sound.deny();
-            toast('Купить за рубли можно будет в приложении');
+          рубли.addEventListener('click', async () => {
+            if (await купитьЗаРубли(м.id, м.имя)) {
+              save.место = м.id;
+              store();
+              sound.сменитьМесто(Places.текущее(save).id);
+              renderPlaces();
+            }
           });
           side.appendChild(рубли);
         }
@@ -1096,6 +1149,7 @@ import { Renderer } from './render3d.js';
     });
   }
   обновитьЗвук();
+  восстановитьПокупки();
 
   if (ТЕСТ) {
     const подпись = document.querySelector('#screen-menu .subtitle');
