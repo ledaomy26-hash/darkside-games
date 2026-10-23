@@ -88,7 +88,7 @@ import { Renderer } from './render3d.js';
   /* Звук и музыка — по записи; выключатели в меню и на паузе. Музыка
      включается с первым касанием: раньше браузер звук не пускает. */
   sound.setEnabled(save.sound !== false);
-  sound.место = Places.текущее(save, ТЕСТ).id;   // у трассы своя музыка и звуки (09.10.2026)
+  sound.место = Places.текущее(save).id;   // у трассы своя музыка и звуки (09.10.2026)
   sound.музыкаВкл = save.music !== false;
   for (const событие of ['pointerdown', 'keydown']) {
     document.addEventListener(событие, () => sound.играть(), { passive: true });
@@ -150,7 +150,7 @@ import { Renderer } from './render3d.js';
     запись.owned = Shop.SKINS.map(s => s.id);
     for (const up of Shop.UPGRADES) запись.levels[up.id] = up.max;
     запись.charm = true;
-    запись.места = Places.МЕСТА.filter(м => м.цена).map(м => м.id);   // и «скоро» — посмотреть
+    запись.места = Places.МЕСТА.filter(м => м.цена).map(м => м.id);   // куплены, но «скоро» не пускает
     запись.вещи = { крышка: Math.max(запись.вещи.крышка || 0, 99), фора: Math.max(запись.вещи.фора || 0, 99) };
     запись.куплено = Shop.ВЕЩИ.filter(в => в.вид === 'навсегда').map(в => в.id);
     запись.красотаКуплено = Object.entries(Shop.КРАСОТА).flatMap(([ряд, список]) => список.map(к => ряд + ':' + к.id));
@@ -464,7 +464,7 @@ import { Renderer } from './render3d.js';
       seed: (Math.random() * 1e9) | 0,
       levels: save.levels,
       startShield: save.charm,
-      место: Places.текущее(save, ТЕСТ).id,    // по какой трассе бежим: от неё и нечисть
+      место: Places.текущее(save).id,    // по какой трассе бежим: от неё и нечисть
       удвоитель: есть('удвоитель'),
       мышь: есть('мышь'),
       перк: Shop.skinById(save.skin).перк
@@ -839,10 +839,12 @@ import { Renderer } from './render3d.js';
 
     for (const м of Places.МЕСТА) {
       const открыта = Places.открыто(save, м);
-      const выбрана = (save.место || 'кладбище') === м.id;
+      /* Выбрана та, по которой правда бежим: в записи может остаться «скоро»
+         (тестовая ссылка до 23.10.2026 пускала на замок) — тогда это кладбище. */
+      const выбрана = Places.текущее(save).id === м.id;
 
       const card = document.createElement('div');
-      card.className = 'card' + (выбрана && открыта && (!м.скоро || ТЕСТ) ? ' card-active'
+      card.className = 'card' + (выбрана && открыта && !м.скоро ? ' card-active'
         : открыта ? ' card-owned' : '');
       card.innerHTML = `
         <img class="card-portrait" src="${картинкаЛавки('трасса-' + м.id)}" alt="">
@@ -853,7 +855,7 @@ import { Renderer } from './render3d.js';
         <div class="card-side"></div>`;
 
       const side = card.querySelector('.card-side');
-      if (м.скоро && !ТЕСТ) {
+      if (м.скоро) {   // и на тестовой ссылке (23.10.2026): выпуск — только кладбище
         /* Цену показываем и у той, что ещё не готова: пусть копят. */
         if (м.цена) side.appendChild(ценник(м.цена));
         side.insertAdjacentHTML('beforeend', '<span class="pill pill-quiet">Скоро</span>');
@@ -868,7 +870,7 @@ import { Renderer } from './render3d.js';
           save.место = м.id;
           store();
           sound.buy();
-          sound.сменитьМесто(Places.текущее(save, ТЕСТ).id);
+          sound.сменитьМесто(Places.текущее(save).id);
           renderPlaces();
         });
         side.appendChild(btn);
@@ -910,7 +912,7 @@ import { Renderer } from './render3d.js';
     save.место = м.id;
     store();
     sound.buy();
-    sound.сменитьМесто(Places.текущее(save, ТЕСТ).id);
+    sound.сменитьМесто(Places.текущее(save).id);
     toast(`${м.имя} открыт — теперь бежим здесь`);
     renderPlaces();
   }
@@ -1093,7 +1095,7 @@ import { Renderer } from './render3d.js';
 
   if (ТЕСТ) {
     const подпись = document.querySelector('#screen-menu .subtitle');
-    if (подпись) подпись.textContent = 'Тестовый режим: всё открыто, покупать ничего не надо';
+    if (подпись) подпись.textContent = 'Тестовый режим: всё открыто, трасса — кладбище';
   }
 
   window.addEventListener('resize', () => renderer.resize());
@@ -1124,7 +1126,7 @@ import { Renderer } from './render3d.js';
   let idleLast = 0;
 
   function newIdleWorld() {
-    idleWorld = new Engine.World({ seed: (Math.random() * 1e9) | 0, место: Places.текущее(save, ТЕСТ).id });
+    idleWorld = new Engine.World({ seed: (Math.random() * 1e9) | 0, место: Places.текущее(save).id });
     idleWorld.skin = Shop.skinById(save.skin);
     idleWorld.красота = красотаМира();
     idleWorld.мышьРядом = есть('мышь');
